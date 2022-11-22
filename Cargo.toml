@@ -1,0 +1,13 @@
+[package]
+name = "datapoint2200"
+version = "0.1.0"
+edition = "2021"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+[[bin]]
+name = "main"
+path = "src/main.rs" 
+
+
+[dependencies]
+parse_int = "0.6.0"
