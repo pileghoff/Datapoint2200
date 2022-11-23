@@ -39,7 +39,26 @@ pub enum InstructionType {
     DisableInts,
     SelectAlpha,
     SelectBeta,
-    Ex,
+    // Ex commands
+    Adr,
+    Status,
+    Data,
+    Write,
+    Com1,
+    Com2,
+    Com3,
+    Com4,
+    Beep,
+    Click,
+    Deck1,
+    Deck2,
+    Rbk,
+    Wbk,
+    Bsp,
+    Sf,
+    Sb,
+    Rewind,
+    Tstop,
 }
 
 #[derive(Debug, Clone, Copy)]

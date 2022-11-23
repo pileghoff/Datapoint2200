@@ -18,8 +18,6 @@
 ## Assembler
 
 - Add a way to add arbitrary data
-- Add the few missing instructions
-- Add all the Ex commands as instructions
 
 ## Interface & Disassembler
 
