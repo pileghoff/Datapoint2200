@@ -249,8 +249,26 @@ fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::DisableInts => unimplemented!(),
         InstructionType::SelectAlpha => unimplemented!(),
         InstructionType::SelectBeta => unimplemented!(),
-        InstructionType::Ex => unimplemented!(),
         InstructionType::Unknown => panic!("Unknown instruction"),
+        InstructionType::Adr => todo!(),
+        InstructionType::Status => todo!(),
+        InstructionType::Data => todo!(),
+        InstructionType::Write => todo!(),
+        InstructionType::Com1 => todo!(),
+        InstructionType::Com2 => todo!(),
+        InstructionType::Com3 => todo!(),
+        InstructionType::Com4 => todo!(),
+        InstructionType::Beep => todo!(),
+        InstructionType::Click => todo!(),
+        InstructionType::Deck1 => todo!(),
+        InstructionType::Deck2 => todo!(),
+        InstructionType::Rbk => todo!(),
+        InstructionType::Wbk => todo!(),
+        InstructionType::Bsp => todo!(),
+        InstructionType::Sf => todo!(),
+        InstructionType::Sb => todo!(),
+        InstructionType::Rewind => todo!(),
+        InstructionType::Tstop => todo!(),
     };
 }
 
@@ -327,7 +345,6 @@ pub fn fetch_instruction(cpu: &mut Cpu) {
         (0, 4, 0) => (InstructionType::DisableInts, None, None),
         (0, 3, 0) => (InstructionType::SelectAlpha, None, None),
         (0, 2, 0) => (InstructionType::SelectBeta, None, None),
-        (1, _, c) if c & 1 == 1 => (InstructionType::Ex, None, None),
         (_, _, _) => panic!("Unknown instruction"),
     };
     inst.address = address;

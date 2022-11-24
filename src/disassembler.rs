@@ -21,7 +21,7 @@ impl Disassembler {
             let c = FLAG_NAME[inst.get_destination() as usize];
             let op = inst.operand;
             let addr = inst.address;
-            let line = (match inst.instruction_type {
+            let line = match inst.instruction_type {
                 crate::instruction::InstructionType::Unknown => "Unknown".to_string(),
                 crate::instruction::InstructionType::LoadImm => {
                     format!("LoadImm {}, {}", d, op.unwrap())
@@ -75,8 +75,26 @@ impl Disassembler {
                 crate::instruction::InstructionType::DisableInts => format!("DisableIntr",),
                 crate::instruction::InstructionType::SelectAlpha => format!("SelecctAlpha",),
                 crate::instruction::InstructionType::SelectBeta => format!("SelectBeta"),
-                crate::instruction::InstructionType::Ex => format!("Ex"),
-            });
+                crate::instruction::InstructionType::Adr => todo!(),
+                crate::instruction::InstructionType::Status => todo!(),
+                crate::instruction::InstructionType::Data => todo!(),
+                crate::instruction::InstructionType::Write => todo!(),
+                crate::instruction::InstructionType::Com1 => todo!(),
+                crate::instruction::InstructionType::Com2 => todo!(),
+                crate::instruction::InstructionType::Com3 => todo!(),
+                crate::instruction::InstructionType::Com4 => todo!(),
+                crate::instruction::InstructionType::Beep => todo!(),
+                crate::instruction::InstructionType::Click => todo!(),
+                crate::instruction::InstructionType::Deck1 => todo!(),
+                crate::instruction::InstructionType::Deck2 => todo!(),
+                crate::instruction::InstructionType::Rbk => todo!(),
+                crate::instruction::InstructionType::Wbk => todo!(),
+                crate::instruction::InstructionType::Bsp => todo!(),
+                crate::instruction::InstructionType::Sf => todo!(),
+                crate::instruction::InstructionType::Sb => todo!(),
+                crate::instruction::InstructionType::Rewind => todo!(),
+                crate::instruction::InstructionType::Tstop => todo!(),
+            };
 
             disassembler.addr_to_line.push((cpu.program_counter, line));
         }
