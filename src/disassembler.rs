@@ -1,4 +1,6 @@
-use crate::cpu::*;
+use std::cmp::max;
+
+use crate::{cpu::*, instruction::InstructionType};
 #[derive(Debug, Clone)]
 struct Disassembler {
     addr_to_line: Vec<(u16, String)>,
@@ -13,7 +15,9 @@ impl Disassembler {
             addr_to_line: Vec::new(),
         };
         cpu.program_counter = 0;
-        while cpu.program_counter as usize <= cpu.memory.len() {
+        cpu.instruction_register.instruction_type = InstructionType::Add;
+        while cpu.instruction_register.instruction_type != InstructionType::Unknown {
+            let program_counter = cpu.program_counter;
             fetch_instruction(&mut cpu);
             let inst = cpu.instruction_register;
             let d = REG_NAME[inst.get_destination() as usize];
@@ -96,8 +100,50 @@ impl Disassembler {
                 crate::instruction::InstructionType::Tstop => todo!(),
             };
 
-            disassembler.addr_to_line.push((cpu.program_counter, line));
+            disassembler.addr_to_line.push((program_counter, line));
         }
         disassembler
+    }
+
+    fn find_index(&self, addr: usize) -> Option<usize> {
+        for (i, (a, _)) in self.addr_to_line.iter().enumerate() {
+            if addr == a.to_owned() as usize {
+                return Some(i);
+            }
+        }
+        None
+    }
+
+    fn get_lines(&self, addr: u16, num_lines: usize, num_lines_before: usize) -> String {
+        let mut res = String::new();
+        let i = self.find_index(addr as usize).unwrap();
+        let start_index = max(0, (i as i32) - (num_lines_before as i32)) as usize;
+        for i in start_index..start_index + num_lines {
+            if let Some((a, l)) = self.addr_to_line.get(i) {
+                res.push_str(format!("{:#06x}: {}\n", a, l).as_str());
+            } else {
+                break;
+            }
+        }
+
+        res
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::assembler::assemble;
+
+    use super::*;
+    #[test]
+    fn test_basics() {
+        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
+        let cpu = Cpu::new(program);
+        let disassembler = Disassembler::new(cpu);
+        let output = disassembler.get_lines(0, 3, 0);
+        assert_eq!(
+            output,
+            "0x0000: LoadImm A, 10\n0x0002: AddImm 246\n0x0004: Halt\n"
+        );
     }
 }

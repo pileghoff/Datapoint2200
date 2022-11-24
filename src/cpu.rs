@@ -40,14 +40,14 @@ impl Cpu {
         cpu
     }
 
-    fn get_from_mem(&mut self) -> u8 {
-        let res = self.memory.get(self.program_counter as usize).unwrap();
+    fn get_from_mem(&mut self) -> Option<u8> {
+        let res = self.memory.get(self.program_counter as usize)?;
         self.program_counter += 1;
-        *res
+        Some(*res)
     }
 
-    fn get_16bit_from_mem(&mut self) -> u16 {
-        self.get_from_mem() as u16 + ((self.get_from_mem() as u16) << 8)
+    fn get_16bit_from_mem(&mut self) -> Option<u16> {
+        Some(self.get_from_mem()? as u16 + ((self.get_from_mem()? as u16) << 8))
     }
 
     fn write_reg(&mut self, index: u8, value: u8) {
@@ -273,9 +273,19 @@ fn execute_instruction(cpu: &mut Cpu) {
 }
 
 pub fn fetch_instruction(cpu: &mut Cpu) {
+    let opcode = cpu.get_from_mem();
+    if opcode.is_none() {
+        cpu.instruction_register = Instruction {
+            instruction_type: InstructionType::Unknown,
+            opcode: 0,
+            operand: None,
+            address: None,
+        };
+        return;
+    }
     let mut inst = Instruction {
         instruction_type: InstructionType::Unknown,
-        opcode: cpu.get_from_mem(),
+        opcode: opcode.unwrap(),
         operand: None,
         address: None,
     };
@@ -285,52 +295,32 @@ pub fn fetch_instruction(cpu: &mut Cpu) {
         inst.get_destination(),
         inst.get_source(),
     ) {
-        (0, _, 6) => (InstructionType::LoadImm, Some(cpu.get_from_mem()), None),
+        (0, _, 6) => (InstructionType::LoadImm, cpu.get_from_mem(), None),
         (3, 0, 0) => (InstructionType::Nop, None, None),
         (3, 7, 7) => (InstructionType::Halt, None, None),
         (3, _, _) => (InstructionType::Load, None, None),
-        (0, 0, 4) => (InstructionType::AddImm, Some(cpu.get_from_mem()), None),
+        (0, 0, 4) => (InstructionType::AddImm, cpu.get_from_mem(), None),
         (2, 0, _) => (InstructionType::Add, None, None),
-        (0, 1, 4) => (InstructionType::AddImmCarry, Some(cpu.get_from_mem()), None),
+        (0, 1, 4) => (InstructionType::AddImmCarry, cpu.get_from_mem(), None),
         (2, 1, _) => (InstructionType::AddCarry, None, None),
-        (0, 2, 4) => (InstructionType::SubImm, Some(cpu.get_from_mem()), None),
+        (0, 2, 4) => (InstructionType::SubImm, cpu.get_from_mem(), None),
         (2, 2, _) => (InstructionType::Sub, None, None),
-        (0, 3, 4) => (
-            InstructionType::SubImmBorrow,
-            Some(cpu.get_from_mem()),
-            None,
-        ),
+        (0, 3, 4) => (InstructionType::SubImmBorrow, cpu.get_from_mem(), None),
         (2, 3, _) => (InstructionType::SubBorrow, None, None),
-        (0, 4, 4) => (InstructionType::AndImm, Some(cpu.get_from_mem()), None),
+        (0, 4, 4) => (InstructionType::AndImm, cpu.get_from_mem(), None),
         (2, 4, _) => (InstructionType::And, None, None),
-        (0, 6, 4) => (InstructionType::OrImm, Some(cpu.get_from_mem()), None),
+        (0, 6, 4) => (InstructionType::OrImm, cpu.get_from_mem(), None),
         (2, 6, _) => (InstructionType::Or, None, None),
-        (0, 5, 4) => (InstructionType::XorImm, Some(cpu.get_from_mem()), None),
+        (0, 5, 4) => (InstructionType::XorImm, cpu.get_from_mem(), None),
         (2, 5, _) => (InstructionType::Xor, None, None),
-        (0, 7, 4) => (InstructionType::CompImm, Some(cpu.get_from_mem()), None),
+        (0, 7, 4) => (InstructionType::CompImm, cpu.get_from_mem(), None),
         (2, 7, _) => (InstructionType::Comp, None, None),
-        (1, 0, 4) => (InstructionType::Jump, None, Some(cpu.get_16bit_from_mem())),
-        (1, c, 0) if c >= 4 => (
-            InstructionType::JumpIf,
-            None,
-            Some(cpu.get_16bit_from_mem()),
-        ),
-        (1, _, 0) => (
-            InstructionType::JumpIfNot,
-            None,
-            Some(cpu.get_16bit_from_mem()),
-        ),
-        (1, 0, 6) => (InstructionType::Call, None, Some(cpu.get_16bit_from_mem())),
-        (1, c, 2) if c >= 4 => (
-            InstructionType::CallIf,
-            None,
-            Some(cpu.get_16bit_from_mem()),
-        ),
-        (1, _, 2) => (
-            InstructionType::CallIfNot,
-            None,
-            Some(cpu.get_16bit_from_mem()),
-        ),
+        (1, 0, 4) => (InstructionType::Jump, None, cpu.get_16bit_from_mem()),
+        (1, c, 0) if c >= 4 => (InstructionType::JumpIf, None, cpu.get_16bit_from_mem()),
+        (1, _, 0) => (InstructionType::JumpIfNot, None, cpu.get_16bit_from_mem()),
+        (1, 0, 6) => (InstructionType::Call, None, cpu.get_16bit_from_mem()),
+        (1, c, 2) if c >= 4 => (InstructionType::CallIf, None, cpu.get_16bit_from_mem()),
+        (1, _, 2) => (InstructionType::CallIfNot, None, cpu.get_16bit_from_mem()),
         (0, 0, 7) => (InstructionType::Return, None, None),
         (0, c, 3) if c >= 4 => (InstructionType::ReturnIf, None, None),
         (0, _, 3) => (InstructionType::ReturnIfNot, None, None),
