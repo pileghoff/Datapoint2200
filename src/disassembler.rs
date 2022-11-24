@@ -120,7 +120,11 @@ impl Disassembler {
         let start_index = max(0, (i as i32) - (num_lines_before as i32)) as usize;
         for i in start_index..start_index + num_lines {
             if let Some((a, l)) = self.addr_to_line.get(i) {
-                res.push_str(format!("{:#06x}: {}\n", a, l).as_str());
+                let mut c = ":";
+                if addr == *a {
+                    c = ">";
+                }
+                res.push_str(format!("{:#06x}{} {}\n", a, c, l).as_str());
             } else {
                 break;
             }
@@ -143,7 +147,31 @@ mod tests {
         let output = disassembler.get_lines(0, 3, 0);
         assert_eq!(
             output,
-            "0x0000: LoadImm A, 10\n0x0002: AddImm 246\n0x0004: Halt\n"
+            "0x0000> LoadImm A, 10\n0x0002: AddImm 246\n0x0004: Halt\n"
+        );
+    }
+
+    #[test]
+    fn test_lines_before() {
+        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
+        let cpu = Cpu::new(program);
+        let disassembler = Disassembler::new(cpu);
+        let output = disassembler.get_lines(2, 3, 1);
+        assert_eq!(
+            output,
+            "0x0000: LoadImm A, 10\n0x0002> AddImm 246\n0x0004: Halt\n"
+        );
+    }
+
+    #[test]
+    fn test_lines_before_neg() {
+        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
+        let cpu = Cpu::new(program);
+        let disassembler = Disassembler::new(cpu);
+        let output = disassembler.get_lines(2, 3, 3);
+        assert_eq!(
+            output,
+            "0x0000: LoadImm A, 10\n0x0002> AddImm 246\n0x0004: Halt\n"
         );
     }
 }
