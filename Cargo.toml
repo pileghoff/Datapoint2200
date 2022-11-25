@@ -11,3 +11,4 @@ path = "src/main.rs"
 
 [dependencies]
 parse_int = "0.6.0"
+crossterm = "0.25"

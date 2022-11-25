@@ -93,7 +93,7 @@ impl Cpu {
     }
 }
 
-fn execute_instruction(cpu: &mut Cpu) {
+pub fn execute_instruction(cpu: &mut Cpu) {
     let inst = &cpu.instruction_register;
     let hl = cpu.get_hl_address();
     let s = inst.get_source();

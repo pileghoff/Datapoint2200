@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use crate::{cpu::*, instruction::InstructionType};
 #[derive(Debug, Clone)]
-struct Disassembler {
+pub struct Disassembler {
     addr_to_line: Vec<(u16, String)>,
 }
 
@@ -10,7 +10,7 @@ const FLAG_NAME: [&str; 4] = ["Cf", "Zf", "Sf", "Pf"];
 const REG_NAME: [&str; 8] = ["A", "B", "C", "D", "E", "H", "L", "M"];
 
 impl Disassembler {
-    fn new(mut cpu: Cpu) -> Disassembler {
+    pub fn new(mut cpu: Cpu) -> Disassembler {
         let mut disassembler = Disassembler {
             addr_to_line: Vec::new(),
         };
@@ -56,7 +56,7 @@ impl Disassembler {
                     format!("JumpIf {}, {}", c, addr.unwrap())
                 }
                 crate::instruction::InstructionType::JumpIfNot => {
-                    format!("JumpIfNor {}, {}", c, addr.unwrap())
+                    format!("JumpIfNot {}, {}", c, addr.unwrap())
                 }
                 crate::instruction::InstructionType::Call => format!("Call {}", addr.unwrap()),
                 crate::instruction::InstructionType::CallIf => {
@@ -114,7 +114,7 @@ impl Disassembler {
         None
     }
 
-    fn get_lines(&self, addr: u16, num_lines: usize, num_lines_before: usize) -> String {
+    pub fn get_lines(&self, addr: u16, num_lines: usize, num_lines_before: usize) -> String {
         let mut res = String::new();
         let i = self.find_index(addr as usize).unwrap();
         let start_index = max(0, (i as i32) - (num_lines_before as i32)) as usize;
