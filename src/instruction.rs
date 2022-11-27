@@ -61,6 +61,9 @@ pub enum InstructionType {
     Tstop,
 }
 
+pub const FLAG_NAME: [&str; 4] = ["Cf", "Zf", "Sf", "Pf"];
+pub const REG_NAME: [&str; 8] = ["A", "B", "C", "D", "E", "H", "L", "M"];
+
 #[derive(Debug, Clone, Copy)]
 pub struct Instruction {
     pub instruction_type: InstructionType,

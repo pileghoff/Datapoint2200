@@ -1,13 +1,13 @@
 use std::cmp::max;
 
-use crate::{cpu::*, instruction::InstructionType};
+use crate::{
+    cpu::*,
+    instruction::{InstructionType, FLAG_NAME, REG_NAME},
+};
 #[derive(Debug, Clone)]
 pub struct Disassembler {
     addr_to_line: Vec<(u16, String)>,
 }
-
-const FLAG_NAME: [&str; 4] = ["Cf", "Zf", "Sf", "Pf"];
-const REG_NAME: [&str; 8] = ["A", "B", "C", "D", "E", "H", "L", "M"];
 
 impl Disassembler {
     pub fn new(mut cpu: Cpu) -> Disassembler {
@@ -114,8 +114,8 @@ impl Disassembler {
         None
     }
 
-    pub fn get_lines(&self, addr: u16, num_lines: usize, num_lines_before: usize) -> String {
-        let mut res = String::new();
+    pub fn get_lines(&self, addr: u16, num_lines: usize, num_lines_before: usize) -> Vec<String> {
+        let mut res = Vec::new();
         let i = self.find_index(addr as usize).unwrap();
         let start_index = max(0, (i as i32) - (num_lines_before as i32)) as usize;
         for i in start_index..start_index + num_lines {
@@ -124,7 +124,7 @@ impl Disassembler {
                 if addr == *a {
                     c = ">";
                 }
-                res.push_str(format!("{:#06x}{} {}\n", a, c, l).as_str());
+                res.push(format!("{:#06x}{} {}\n", a, c, l));
             } else {
                 break;
             }
