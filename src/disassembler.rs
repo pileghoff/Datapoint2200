@@ -124,7 +124,7 @@ impl Disassembler {
                 if addr == *a {
                     c = ">";
                 }
-                res.push(format!("{:#06x}{} {}\n", a, c, l));
+                res.push(format!("{:#06x}{} {}", a, c, l));
             } else {
                 break;
             }
@@ -136,6 +136,8 @@ impl Disassembler {
 
 #[cfg(test)]
 mod tests {
+    use std::vec;
+
     use crate::assembler::assemble;
 
     use super::*;
@@ -147,7 +149,11 @@ mod tests {
         let output = disassembler.get_lines(0, 3, 0);
         assert_eq!(
             output,
-            "0x0000> LoadImm A, 10\n0x0002: AddImm 246\n0x0004: Halt\n"
+            vec![
+                "0x0000> LoadImm A, 10",
+                "0x0002: AddImm 246",
+                "0x0004: Halt"
+            ]
         );
     }
 
@@ -159,7 +165,11 @@ mod tests {
         let output = disassembler.get_lines(2, 3, 1);
         assert_eq!(
             output,
-            "0x0000: LoadImm A, 10\n0x0002> AddImm 246\n0x0004: Halt\n"
+            vec![
+                "0x0000: LoadImm A, 10",
+                "0x0002> AddImm 246",
+                "0x0004: Halt"
+            ]
         );
     }
 
@@ -171,7 +181,11 @@ mod tests {
         let output = disassembler.get_lines(2, 3, 3);
         assert_eq!(
             output,
-            "0x0000: LoadImm A, 10\n0x0002> AddImm 246\n0x0004: Halt\n"
+            vec![
+                "0x0000: LoadImm A, 10",
+                "0x0002> AddImm 246",
+                "0x0004: Halt"
+            ]
         );
     }
 }

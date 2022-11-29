@@ -112,6 +112,7 @@ fn get_instruction(line: &str) -> &str {
 // Example:
 // Add 2, 3 -> ["2", "3"]
 
+#[derive(Debug)]
 struct OpParser {
     ops: Vec<String>,
     counter: usize,
@@ -184,7 +185,6 @@ fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Vec<u8> {
 
     // Used to set the [t]ype, [d]estination and [s]ource of the opcode
     let tds = |t: u8, d: u8, s: u8| (t & 3) << 6 | (d & 7) << 3 | s & 7;
-
     match inst {           
         "Halt"         => vec![0],
         "Load"         => vec![tds(3, op.op(), op.op())],

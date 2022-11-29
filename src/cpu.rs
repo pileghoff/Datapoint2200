@@ -91,10 +91,21 @@ impl Cpu {
     fn get_hl_address(&self) -> u16 {
         ((self.read_reg(5) as u16) << 8) + self.read_reg(6) as u16
     }
+
+    fn push_stack(&mut self, value: u16) {
+        self.stack.push(value);
+        while self.stack.len() >= 16 {
+            self.stack.remove(0);
+        }
+    }
+
+    fn pop_stack(&mut self) -> u16 {
+        self.stack.pop().unwrap()
+    }
 }
 
 pub fn execute_instruction(cpu: &mut Cpu) {
-    let inst = &cpu.instruction_register;
+    let inst = &cpu.clone().instruction_register;
     let hl = cpu.get_hl_address();
     let s = inst.get_source();
     let d = inst.get_destination();
@@ -232,15 +243,38 @@ pub fn execute_instruction(cpu: &mut Cpu) {
                 cpu.program_counter = 0x1fff & inst.address.unwrap();
             }
         }
-        InstructionType::Call => unimplemented!(),
-        InstructionType::CallIf => unimplemented!(),
-        InstructionType::CallIfNot => unimplemented!(),
-        InstructionType::Return => unimplemented!(),
-        InstructionType::ReturnIf => unimplemented!(),
-        InstructionType::ReturnIfNot => unimplemented!(),
+        InstructionType::Call => {
+            cpu.push_stack(cpu.program_counter);
+            cpu.program_counter = 0x1fff & inst.address.unwrap();
+        }
+        InstructionType::CallIf => {
+            if cpu.read_flag(d) {
+                cpu.push_stack(cpu.program_counter);
+                cpu.program_counter = 0x1fff & inst.address.unwrap();
+            }
+        }
+        InstructionType::CallIfNot => {
+            if !cpu.read_flag(d) {
+                cpu.push_stack(cpu.program_counter);
+                cpu.program_counter = 0x1fff & inst.address.unwrap();
+            }
+        }
+        InstructionType::Return => {
+            cpu.program_counter = cpu.pop_stack();
+        }
+        InstructionType::ReturnIf => {
+            if cpu.read_flag(d) {
+                cpu.program_counter = cpu.pop_stack();
+            }
+        }
+        InstructionType::ReturnIfNot => {
+            if !cpu.read_flag(d) {
+                cpu.program_counter = cpu.pop_stack();
+            }
+        }
         InstructionType::ShiftRight => unimplemented!(),
         InstructionType::ShiftLeft => unimplemented!(),
-        InstructionType::Nop => unimplemented!(),
+        InstructionType::Nop => {}
         InstructionType::Halt => cpu.halted = true,
         InstructionType::Input => unimplemented!(),
         InstructionType::Pop => unimplemented!(),
@@ -469,7 +503,33 @@ mod tests {
 
         let mut cpu = Cpu::new(program);
         let insts_cnt = run_to_halt(&mut cpu);
-
         assert_eq!(insts_cnt, 24);
+    }
+
+    #[test]
+    fn test_call() {
+        let program = assemble(vec![
+            "Nop",        //addr 0
+            "Call test",  // addr 1, 2, 3
+            "Halt",       // addr 4
+            "test: Halt", // addr 5
+        ]);
+
+        let mut cpu = Cpu::new(program);
+        run_to_halt(&mut cpu);
+
+        assert_eq!(cpu.pop_stack(), 4);
+        assert_eq!(cpu.program_counter, 6);
+    }
+
+    #[test]
+    fn test_return() {
+        let program = assemble(vec!["Call test", "Halt", "test: LoadImm B, 10", "Return"]);
+
+        let mut cpu = Cpu::new(program);
+        run_to_halt(&mut cpu);
+
+        assert_eq!(cpu.read_reg(1), 10);
+        assert_eq!(cpu.program_counter, 4);
     }
 }
