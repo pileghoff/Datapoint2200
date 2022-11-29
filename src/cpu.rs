@@ -272,8 +272,14 @@ pub fn execute_instruction(cpu: &mut Cpu) {
                 cpu.program_counter = cpu.pop_stack();
             }
         }
-        InstructionType::ShiftRight => unimplemented!(),
-        InstructionType::ShiftLeft => unimplemented!(),
+        InstructionType::ShiftRight => {
+            cpu.write_reg(0, cpu.read_reg(0).rotate_right(1));
+            cpu.write_flag(0, (cpu.read_reg(0) & 0x80) == 0x80);
+        }
+        InstructionType::ShiftLeft => {
+            cpu.write_reg(0, cpu.read_reg(0).rotate_left(1));
+            cpu.write_flag(0, (cpu.read_reg(0) & 0x1) == 0x1);
+        }
         InstructionType::Nop => {}
         InstructionType::Halt => cpu.halted = true,
         InstructionType::Input => unimplemented!(),
