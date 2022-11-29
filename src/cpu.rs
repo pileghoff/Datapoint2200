@@ -282,14 +282,22 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         }
         InstructionType::Nop => {}
         InstructionType::Halt => cpu.halted = true,
-        InstructionType::Input => unimplemented!(),
-        InstructionType::Pop => unimplemented!(),
-        InstructionType::Push => unimplemented!(),
+        InstructionType::Pop => {
+            let value = cpu.pop_stack();
+            cpu.write_reg(5, ((value >> 8) & 0xff) as u8);
+            cpu.write_reg(6, (value & 0xff) as u8);
+        }
+        InstructionType::Push => {
+            let mut value: u16 = cpu.read_reg(6) as u16;
+            value += (cpu.read_reg(5) as u16) << 8;
+            cpu.push_stack(value);
+        }
         InstructionType::EnableIntr => unimplemented!(),
         InstructionType::DisableInts => unimplemented!(),
         InstructionType::SelectAlpha => unimplemented!(),
         InstructionType::SelectBeta => unimplemented!(),
         InstructionType::Unknown => panic!("Unknown instruction"),
+        InstructionType::Input => unimplemented!(),
         InstructionType::Adr => todo!(),
         InstructionType::Status => todo!(),
         InstructionType::Data => todo!(),
@@ -537,5 +545,25 @@ mod tests {
 
         assert_eq!(cpu.read_reg(1), 10);
         assert_eq!(cpu.program_counter, 4);
+    }
+
+    #[test]
+    fn test_push_stack() {
+        let program = assemble(vec!["LoadImm H, 0x88", "LoadImm L, 0x77", "Push", "Halt"]);
+
+        let mut cpu = Cpu::new(program);
+        run_to_halt(&mut cpu);
+
+        assert_eq!(cpu.pop_stack(), 0x8877);
+    }
+
+    #[test]
+    fn test_pop_stack() {
+        let program = assemble(vec!["Call test", "Nop", "Nop", "Nop", "test: Pop", "Halt"]);
+
+        let mut cpu = Cpu::new(program);
+        run_to_halt(&mut cpu);
+
+        assert_eq!(cpu.get_hl_address(), 0x3);
     }
 }
