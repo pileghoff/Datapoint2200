@@ -208,6 +208,7 @@ fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Vec<u8> {
         "EnableIntr"   => vec![tds(0, 5, 0)],
         "DisableInts"  => vec![tds(0, 4, 0)],
         "SelectAlpha"  => vec![tds(0, 3, 0)],
+        "SelectBeta"  => vec![tds(0, 2, 0)],
 
         // Immediate instructions
         "LoadImm"      => vec![tds(0, op.op(), 6)    , op.op()],

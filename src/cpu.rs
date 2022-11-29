@@ -294,8 +294,12 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         }
         InstructionType::EnableIntr => unimplemented!(),
         InstructionType::DisableInts => unimplemented!(),
-        InstructionType::SelectAlpha => unimplemented!(),
-        InstructionType::SelectBeta => unimplemented!(),
+        InstructionType::SelectAlpha => {
+            cpu.alpha_mode = true;
+        }
+        InstructionType::SelectBeta => {
+            cpu.alpha_mode = false;
+        }
         InstructionType::Unknown => panic!("Unknown instruction"),
         InstructionType::Input => unimplemented!(),
         InstructionType::Adr => todo!(),
@@ -565,5 +569,23 @@ mod tests {
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.get_hl_address(), 0x3);
+    }
+
+    #[test]
+    fn test_select_beta() {
+        let program = assemble(vec![
+            "SelectBeta",
+            "LoadImm A, 10",
+            "SelectAlpha",
+            "LoadImm A, 20",
+            "SelectBeta",
+            "Halt",
+        ]);
+
+        let mut cpu = Cpu::new(program);
+        run_to_halt(&mut cpu);
+
+        assert_eq!(cpu.read_reg(0), 10);
+        assert_eq!(cpu.alpha_mode, false);
     }
 }
