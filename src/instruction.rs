@@ -84,4 +84,49 @@ impl Instruction {
     pub fn get_source(&self) -> u8 {
         self.opcode & 0x07
     }
+
+    pub fn get_clock_cycles(&self) -> usize {
+        match self.instruction_type {
+            InstructionType::Unknown => 0,
+            InstructionType::LoadImm => 2,
+            InstructionType::Load => 2,
+            InstructionType::AddImm => 3,
+            InstructionType::Add => 2,
+            InstructionType::AddImmCarry => 3,
+            InstructionType::AddCarry => 2,
+            InstructionType::SubImm => 3,
+            InstructionType::Sub => 2,
+            InstructionType::SubImmBorrow => 3,
+            InstructionType::SubBorrow => 2,
+            InstructionType::AndImm => 3,
+            InstructionType::And => 2,
+            InstructionType::OrImm => 3,
+            InstructionType::Or => 2,
+            InstructionType::XorImm => 3,
+            InstructionType::Xor => 2,
+            InstructionType::CompImm => 3,
+            InstructionType::Comp => 2,
+            InstructionType::Jump => 4,
+            InstructionType::JumpIf => 4,
+            InstructionType::JumpIfNot => 4,
+            InstructionType::Call => 4,
+            InstructionType::CallIf => 4,
+            InstructionType::CallIfNot => 4,
+            InstructionType::Return => 2,
+            InstructionType::ReturnIf => 2,
+            InstructionType::ReturnIfNot => 2,
+            InstructionType::ShiftRight => 2,
+            InstructionType::ShiftLeft => 2,
+            InstructionType::Nop => 2,
+            InstructionType::Halt => 0,
+            InstructionType::Input => 6,
+            InstructionType::Pop => 3,
+            InstructionType::Push => 2,
+            InstructionType::EnableIntr => 2,
+            InstructionType::DisableInts => 2,
+            InstructionType::SelectAlpha => 2,
+            InstructionType::SelectBeta => 2,
+            _ => 6, // All ex instructions
+        }
+    }
 }
