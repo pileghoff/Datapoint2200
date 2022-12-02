@@ -61,7 +61,7 @@ pub enum InstructionType {
     Tstop,
 }
 
-pub const FLAG_NAME: [&str; 4] = ["Cf", "Zf", "Sf", "Pf"];
+pub const FLAG_NAME: [&str; 8] = ["Cf", "Zf", "Sf", "Pf", "_", "_", "_", "_"];
 pub const REG_NAME: [&str; 8] = ["A", "B", "C", "D", "E", "H", "L", "M"];
 
 #[derive(Debug, Clone, Copy)]

@@ -51,11 +51,20 @@ fn render_cpu_flags(cpu: &Cpu) {
 }
 
 fn main() -> Result<()> {
+    // let program = assemble(vec![
+    //     "LoadImm A, 10",
+    //     "loop: SubImm 1",
+    //     "JumpIfNot 0, loop",
+    //     "Halt",
+    // ]);
     let program = assemble(vec![
-        "LoadImm A, 10",
-        "loop: SubImm 1",
-        "JumpIfNot 0, loop",
-        "Halt",
+        "CompImm 1",      // Carry flag gets set if A is 0 (First time)
+        "JumpIf Cf, run", // Jump if A was 0
+        "Halt",           // Only halt, only get here if the interrupts actually works
+        "run: LoadImm A, 1",
+        "EnableIntr",
+        "Nop",
+        "Jump run",
     ]);
 
     let mut cpu = Cpu::new(program);

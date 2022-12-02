@@ -3,6 +3,8 @@ use crate::{clock::*, instruction::*};
 #[derive(Debug, Clone)]
 pub struct Cpu {
     pub halted: bool,
+    pub intr_enabled: bool,
+    pub intr_saved: bool,
     pub memory: [u8; 4096],
     pub alpha_mode: bool,
     pub alpha_registers: [u8; 7],
@@ -19,6 +21,8 @@ impl Cpu {
     pub fn new(mem: Vec<u8>) -> Cpu {
         let mut cpu = Cpu {
             halted: false,
+            intr_enabled: false,
+            intr_saved: false,
             memory: [0; 4096],
             alpha_mode: true,
             alpha_registers: [0, 0, 0, 0, 0, 0, 0],
@@ -111,6 +115,7 @@ pub fn execute_instruction(cpu: &mut Cpu) {
     let hl = cpu.get_hl_address();
     let s = inst.get_source();
     let d = inst.get_destination();
+    let c = if d >= 4 { d - 4 } else { d };
     match inst.instruction_type {
         InstructionType::LoadImm => {
             cpu.write_reg(d, inst.operand.unwrap());
@@ -236,12 +241,12 @@ pub fn execute_instruction(cpu: &mut Cpu) {
             cpu.program_counter = 0x1fff & inst.address.unwrap();
         }
         InstructionType::JumpIf => {
-            if cpu.read_flag(d) {
+            if cpu.read_flag(c) {
                 cpu.program_counter = 0x1fff & inst.address.unwrap();
             }
         }
         InstructionType::JumpIfNot => {
-            if !cpu.read_flag(d) {
+            if !cpu.read_flag(c) {
                 cpu.program_counter = 0x1fff & inst.address.unwrap();
             }
         }
@@ -250,13 +255,13 @@ pub fn execute_instruction(cpu: &mut Cpu) {
             cpu.program_counter = 0x1fff & inst.address.unwrap();
         }
         InstructionType::CallIf => {
-            if cpu.read_flag(d) {
+            if cpu.read_flag(c) {
                 cpu.push_stack(cpu.program_counter);
                 cpu.program_counter = 0x1fff & inst.address.unwrap();
             }
         }
         InstructionType::CallIfNot => {
-            if !cpu.read_flag(d) {
+            if !cpu.read_flag(c) {
                 cpu.push_stack(cpu.program_counter);
                 cpu.program_counter = 0x1fff & inst.address.unwrap();
             }
@@ -265,12 +270,12 @@ pub fn execute_instruction(cpu: &mut Cpu) {
             cpu.program_counter = cpu.pop_stack();
         }
         InstructionType::ReturnIf => {
-            if cpu.read_flag(d) {
+            if cpu.read_flag(c) {
                 cpu.program_counter = cpu.pop_stack();
             }
         }
         InstructionType::ReturnIfNot => {
-            if !cpu.read_flag(d) {
+            if !cpu.read_flag(c) {
                 cpu.program_counter = cpu.pop_stack();
             }
         }
@@ -294,8 +299,12 @@ pub fn execute_instruction(cpu: &mut Cpu) {
             value += (cpu.read_reg(5) as u16) << 8;
             cpu.push_stack(value);
         }
-        InstructionType::EnableIntr => unimplemented!(),
-        InstructionType::DisableInts => unimplemented!(),
+        InstructionType::EnableIntr => {
+            cpu.intr_enabled = true;
+        }
+        InstructionType::DisableInts => {
+            cpu.intr_enabled = false;
+        }
         InstructionType::SelectAlpha => {
             cpu.alpha_mode = true;
         }
@@ -325,7 +334,18 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::Tstop => todo!(),
     };
 
-    cpu.clock.clock(inst.get_clock_cycles());
+    // If the clock passes the 1 ms mark or we have a saved up interrupt
+    if cpu.clock.clock(inst.get_clock_cycles()) || cpu.intr_saved {
+        // If interrupts are enabled, and we did not enable this cycle
+        if cpu.intr_enabled && inst.instruction_type != InstructionType::EnableIntr {
+            // Interrupt triggered
+            cpu.push_stack(cpu.program_counter);
+            cpu.program_counter = 0;
+            cpu.intr_saved = false;
+        } else {
+            cpu.intr_saved = true;
+        }
+    }
 }
 
 pub fn fetch_instruction(cpu: &mut Cpu) {
@@ -615,5 +635,30 @@ mod tests {
         print!("{}", elapsed.as_micros());
         assert!(elapsed.as_micros() > 16000);
         assert!(elapsed.as_micros() < 18000);
+    }
+
+    #[test]
+    fn test_intr() {
+        let program = assemble(vec![
+            "CompImm 1",      // Carry flag gets set if A is 0 (First time)
+            "JumpIf Cf, run", // Jump if A was 0
+            "Halt",           // Only halt, only get here if the interrupts actually works
+            "run: LoadImm A, 1",
+            "EnableIntr",
+            "Nop",
+            "Jump run",
+        ]);
+
+        let mut cpu = Cpu::new(program);
+
+        let mut counter = 0;
+        while !cpu.halted {
+            counter += 1;
+            fetch_instruction(&mut cpu);
+            execute_instruction(&mut cpu);
+            if counter > 254 {
+                assert!(false);
+            }
+        }
     }
 }
