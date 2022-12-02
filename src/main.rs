@@ -1,6 +1,7 @@
 #![allow(dead_code)]
 
 pub mod assembler;
+pub mod clock;
 pub mod cpu;
 pub mod disassembler;
 pub mod instruction;

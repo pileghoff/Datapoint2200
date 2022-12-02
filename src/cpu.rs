@@ -1,4 +1,4 @@
-use crate::instruction::*;
+use crate::{clock::*, instruction::*};
 
 #[derive(Debug, Clone)]
 pub struct Cpu {
@@ -12,6 +12,7 @@ pub struct Cpu {
     pub program_counter: u16,
     pub instruction_register: Instruction,
     pub stack: Vec<u16>,
+    pub clock: Clock,
 }
 
 impl Cpu {
@@ -32,6 +33,7 @@ impl Cpu {
                 address: None,
             },
             stack: Vec::new(),
+            clock: Clock::new(1.0),
         };
         for (i, b) in mem.iter().enumerate() {
             cpu.memory[i] = *b;
@@ -322,6 +324,8 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::Rewind => todo!(),
         InstructionType::Tstop => todo!(),
     };
+
+    cpu.clock.clock(inst.get_clock_cycles());
 }
 
 pub fn fetch_instruction(cpu: &mut Cpu) {
@@ -409,6 +413,8 @@ fn run_to_halt(cpu: &mut Cpu) -> u32 {
 
 #[cfg(test)]
 mod tests {
+    use std::time;
+
     use super::*;
     use crate::assembler::assemble;
 
@@ -587,5 +593,27 @@ mod tests {
 
         assert_eq!(cpu.read_reg(0), 10);
         assert_eq!(cpu.alpha_mode, false);
+    }
+
+    #[test]
+    fn test_clock() {
+        let program = assemble(vec![
+            "SelectBeta",    // 2
+            "LoadImm A, 10", // 2
+            "SelectAlpha",   // 2
+            "LoadImm A, 20", // 2
+            "SelectBeta",    // 2
+            "Halt",          // 0
+        ]);
+
+        let mut cpu = Cpu::new(program);
+        cpu.clock.time_scale = 1000.0; // Slow down 1000 times
+        let start = time::Instant::now();
+        run_to_halt(&mut cpu);
+        let elapsed = start.elapsed();
+        // 10 cycles, at 1000 times slowdown should take = 16000 us
+        print!("{}", elapsed.as_micros());
+        assert!(elapsed.as_micros() > 16000);
+        assert!(elapsed.as_micros() < 18000);
     }
 }
