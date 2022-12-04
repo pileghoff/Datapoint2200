@@ -138,14 +138,14 @@ impl Disassembler {
 mod tests {
     use std::vec;
 
-    use crate::assembler::assemble;
+    use crate::{assembler::assemble, datapoint::Datapoint};
 
     use super::*;
     #[test]
     fn test_basics() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let cpu = Cpu::new(program);
-        let disassembler = Disassembler::new(cpu);
+        let program = vec!["LoadImm A, 10", "AddImm 246", "Halt"];
+        let machine = Datapoint::new(program, 1.0);
+        let disassembler = Disassembler::new(machine.cpu);
         let output = disassembler.get_lines(0, 3, 0);
         assert_eq!(
             output,
@@ -159,9 +159,9 @@ mod tests {
 
     #[test]
     fn test_lines_before() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let cpu = Cpu::new(program);
-        let disassembler = Disassembler::new(cpu);
+        let program = vec!["LoadImm A, 10", "AddImm 246", "Halt"];
+        let machine = Datapoint::new(program, 1.0);
+        let disassembler = Disassembler::new(machine.cpu);
         let output = disassembler.get_lines(2, 3, 1);
         assert_eq!(
             output,
@@ -175,9 +175,9 @@ mod tests {
 
     #[test]
     fn test_lines_before_neg() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let cpu = Cpu::new(program);
-        let disassembler = Disassembler::new(cpu);
+        let program = vec!["LoadImm A, 10", "AddImm 246", "Halt"];
+        let machine = Datapoint::new(program, 1.0);
+        let disassembler = Disassembler::new(machine.cpu);
         let output = disassembler.get_lines(2, 3, 3);
         assert_eq!(
             output,

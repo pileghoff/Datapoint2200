@@ -22,46 +22,14 @@ pub struct Cpu {
     pub program_counter: u16,
     pub instruction_register: Instruction,
     pub stack: Vec<u16>,
-    pub clock: Option<Receiver<u8>>,
-    pub intr: Option<Receiver<u8>>,
-    pub databus_command: Option<Sender<Instruction>>,
-    pub databus_input: Option<Dataline>,
-    pub databus_output: Option<Dataline>,
+    pub clock: Receiver<u8>,
+    pub intr: Receiver<u8>,
+    pub databus_command: Sender<Instruction>,
+    pub databus_input: Dataline,
+    pub databus_output: Dataline,
 }
 
 impl Cpu {
-    pub fn new(mem: Vec<u8>) -> Cpu {
-        let mut cpu = Cpu {
-            halted: false,
-            intr_enabled: false,
-            intr_saved: false,
-            memory: [0; 4096],
-            alpha_mode: true,
-            alpha_registers: [0, 0, 0, 0, 0, 0, 0],
-            alpha_flipflops: [false, false, false, false],
-            beta_registers: [0, 0, 0, 0, 0, 0, 0],
-            beta_flipflops: [false, false, false, false],
-            program_counter: 0,
-            instruction_register: Instruction {
-                instruction_type: InstructionType::Unknown,
-                opcode: 0,
-                operand: None,
-                address: None,
-            },
-            stack: Vec::new(),
-            clock: None,
-            intr: None,
-            databus_command: None,
-            databus_output: None,
-            databus_input: None,
-        };
-        for (i, b) in mem.iter().enumerate() {
-            cpu.memory[i] = *b;
-        }
-
-        cpu
-    }
-
     fn get_from_mem(&mut self) -> Option<u8> {
         let res = self.memory.get(self.program_counter as usize)?;
         self.program_counter += 1;
@@ -306,9 +274,7 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::Nop => {}
         InstructionType::Halt => {
             cpu.halted = true;
-            if let Some(databus) = &cpu.databus_command {
-                databus.send(*inst);
-            }
+            cpu.databus_command.send(*inst);
         }
         InstructionType::Pop => {
             let value = cpu.pop_stack();
@@ -334,31 +300,21 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         }
         InstructionType::Unknown => panic!("Unknown instruction"),
         InstructionType::Input => {
-            if let Some(databus_output) = &(cpu.databus_output.clone()) {
-                if let Ok(val) = databus_output.read() {
-                    cpu.write_reg(0, *val);
-                }
+            if let Ok(val) = cpu.databus_output.clone().read() {
+                cpu.write_reg(0, *val);
             }
         }
         InstructionType::Adr => {
-            if let Some(databus_command) = &cpu.databus_command {
-                if let Some(databus_input) = &cpu.databus_input {
-                    if let Ok(mut val) = databus_input.write() {
-                        *val = cpu.read_reg(0);
-                    }
-                }
-                databus_command.send(*inst);
+            if let Ok(mut val) = cpu.databus_input.write() {
+                *val = cpu.read_reg(0);
             }
+            cpu.databus_command.send(*inst);
         }
         InstructionType::Status => {
-            if let Some(databus_command) = &cpu.databus_command {
-                databus_command.send(*inst);
-            }
+            cpu.databus_command.send(*inst);
         }
         InstructionType::Data => {
-            if let Some(databus_command) = &cpu.databus_command {
-                databus_command.send(*inst);
-            }
+            cpu.databus_command.send(*inst);
         }
         InstructionType::Write => todo!(),
         InstructionType::Com1 => todo!(),
@@ -378,18 +334,14 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::Tstop => todo!(),
     };
 
-    if let Some(clock) = &cpu.clock {
-        for i in 0..inst.get_clock_cycles() {
-            clock.recv().unwrap();
-        }
+    for i in 0..inst.get_clock_cycles() {
+        cpu.clock.recv().unwrap();
     }
 
-    if let Some(intr) = &cpu.intr {
-        let intr_happened = intr.try_recv();
-        if intr_happened.is_ok() {
-            cpu.intr_saved = true;
-        };
-    }
+    let intr_happened = cpu.intr.try_recv();
+    if intr_happened.is_ok() {
+        cpu.intr_saved = true;
+    };
 
     if cpu.intr_saved {
         // If interrupts are enabled, and we did not enable this cycle
@@ -495,17 +447,6 @@ pub fn fetch_instruction(cpu: &mut Cpu) {
     cpu.instruction_register = inst;
 }
 
-fn run_to_halt(cpu: &mut Cpu) -> u32 {
-    let mut counter = 0;
-    while !cpu.halted {
-        counter += 1;
-        fetch_instruction(cpu);
-        execute_instruction(cpu);
-    }
-
-    counter
-}
-
 #[cfg(test)]
 mod tests {
     use std::time;
@@ -515,179 +456,178 @@ mod tests {
 
     #[test]
     fn test_fetch_add_inst() {
-        let program = assemble(vec!["Add 2"]);
-        let mut cpu = Cpu::new(program);
-        fetch_instruction(&mut cpu);
+        let program = vec!["Add 2"];
+        let mut machine = Datapoint::new(program, 1.0);
+        fetch_instruction(&mut machine.cpu);
         assert_eq!(
-            cpu.instruction_register.instruction_type,
+            machine.cpu.instruction_register.instruction_type,
             InstructionType::Add
         );
-        assert_eq!(cpu.instruction_register.operand, None);
-        assert_eq!(cpu.instruction_register.get_source(), 2);
+        assert_eq!(machine.cpu.instruction_register.operand, None);
+        assert_eq!(machine.cpu.instruction_register.get_source(), 2);
     }
 
     #[test]
     fn test_load_imm_inst() {
-        let program = assemble(vec!["LoadImm A, 10"]);
-        let mut cpu = Cpu::new(program);
-        fetch_instruction(&mut cpu);
-        execute_instruction(&mut cpu);
-        assert_eq!(cpu.alpha_registers[0], 10);
+        let program = vec!["LoadImm A, 10"];
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
+        assert_eq!(machine.cpu.alpha_registers[0], 10);
     }
 
     #[test]
     fn test_load_reg_to_reg_inst() {
-        let program = assemble(vec!["LoadImm A, 10", "Load B, A", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let program = vec!["LoadImm A, 10", "Load B, A", "Halt"];
+        let mut machine = Datapoint::new(program, 1.0);
 
-        run_to_halt(&mut cpu);
+        machine.run();
 
-        assert_eq!(cpu.alpha_registers[1], 10);
+        assert_eq!(machine.cpu.alpha_registers[1], 10);
     }
 
     #[test]
     fn test_add_inst() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 10", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let program = vec!["LoadImm A, 10", "AddImm 10", "Halt"];
+        let mut machine = Datapoint::new(program, 1.0);
 
-        run_to_halt(&mut cpu);
+        machine.run();
 
-        assert_eq!(cpu.read_reg(0), 20);
-        assert_eq!(cpu.read_flag(0), false);
-        assert_eq!(cpu.read_flag(1), false);
-        assert_eq!(cpu.read_flag(2), false);
-        assert_eq!(cpu.read_flag(3), false);
+        assert_eq!(machine.cpu.read_reg(0), 20);
+        assert_eq!(machine.cpu.read_flag(0), false);
+        assert_eq!(machine.cpu.read_flag(1), false);
+        assert_eq!(machine.cpu.read_flag(2), false);
+        assert_eq!(machine.cpu.read_flag(3), false);
     }
 
     #[test]
     fn test_add_odd_parity_inst() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 11", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let program = vec!["LoadImm A, 10", "AddImm 11", "Halt"];
+        let mut machine = Datapoint::new(program, 1.0);
 
-        run_to_halt(&mut cpu);
+        machine.run();
 
-        assert_eq!(cpu.read_reg(0), 21);
-        assert_eq!(cpu.read_flag(0), false);
-        assert_eq!(cpu.read_flag(1), false);
-        assert_eq!(cpu.read_flag(2), false);
-        assert_eq!(cpu.read_flag(3), true);
+        assert_eq!(machine.cpu.read_reg(0), 21);
+        assert_eq!(machine.cpu.read_flag(0), false);
+        assert_eq!(machine.cpu.read_flag(1), false);
+        assert_eq!(machine.cpu.read_flag(2), false);
+        assert_eq!(machine.cpu.read_flag(3), true);
     }
 
     #[test]
     fn test_add_sign_flag_inst() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 138", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let program = vec!["LoadImm A, 10", "AddImm 138", "Halt"];
+        let mut machine = Datapoint::new(program, 1.0);
 
-        run_to_halt(&mut cpu);
+        machine.run();
 
-        assert_eq!(cpu.read_flag(0), false);
-        assert_eq!(cpu.read_flag(1), false);
-        assert_eq!(cpu.read_flag(2), true);
-        assert_eq!(cpu.read_flag(3), true);
+        assert_eq!(machine.cpu.read_flag(0), false);
+        assert_eq!(machine.cpu.read_flag(1), false);
+        assert_eq!(machine.cpu.read_flag(2), true);
+        assert_eq!(machine.cpu.read_flag(3), true);
     }
 
     #[test]
     fn test_add_zero_and_overflow_inst() {
-        let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let program = vec!["LoadImm A, 10", "AddImm 246", "Halt"];
+        let mut machine = Datapoint::new(program, 1.0);
 
-        run_to_halt(&mut cpu);
+        machine.run();
 
-        assert_eq!(cpu.read_flag(0), true);
-        assert_eq!(cpu.read_flag(1), true);
-        assert_eq!(cpu.read_flag(2), false);
-        assert_eq!(cpu.read_flag(3), false);
+        assert_eq!(machine.cpu.read_flag(0), true);
+        assert_eq!(machine.cpu.read_flag(1), true);
+        assert_eq!(machine.cpu.read_flag(2), false);
+        assert_eq!(machine.cpu.read_flag(3), false);
     }
 
     #[test]
     fn test_sub_underflow() {
-        let program = assemble(vec!["LoadImm A, 10", "SubImm 11", "Halt"]);
+        let program = vec!["LoadImm A, 10", "SubImm 11", "Halt"];
 
-        let mut cpu = Cpu::new(program);
-        run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
 
-        assert_eq!(cpu.read_flag(0), true);
-        assert_eq!(cpu.read_reg(0) as i8, -1);
+        assert_eq!(machine.cpu.read_flag(0), true);
+        assert_eq!(machine.cpu.read_reg(0) as i8, -1);
     }
 
     #[test]
     fn test_jump_if_not() {
-        let program = assemble(vec![
+        let program = vec![
             //                                     Number of times instruction is run
             "LoadImm A, 10",     // 10                       =  1
             "loop: SubImm 1",    // 9, 8,7,6,5,4,3,2,1,0,-1  = 11
             "JumpIfNot 0, loop", //9,8,7,6,5,4,3,2,1,0,-1    = 11
             "Halt",              // -1                       =  1
-        ]); //                                                 24 total
+        ]; //                                                 24 total
 
-        let mut cpu = Cpu::new(program);
-        let insts_cnt = run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        let insts_cnt = machine.run();
         assert_eq!(insts_cnt, 24);
     }
 
     #[test]
     fn test_call() {
-        let program = assemble(vec![
+        let program = vec![
             "Nop",        //addr 0
             "Call test",  // addr 1, 2, 3
             "Halt",       // addr 4
             "test: Halt", // addr 5
-        ]);
+        ];
 
-        let mut cpu = Cpu::new(program);
-        run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
 
-        assert_eq!(cpu.pop_stack(), 4);
-        assert_eq!(cpu.program_counter, 6);
+        assert_eq!(machine.cpu.pop_stack(), 4);
+        assert_eq!(machine.cpu.program_counter, 6);
     }
 
     #[test]
     fn test_return() {
-        let program = assemble(vec!["Call test", "Halt", "test: LoadImm B, 10", "Return"]);
+        let program = vec!["Call test", "Halt", "test: LoadImm B, 10", "Return"];
 
-        let mut cpu = Cpu::new(program);
-        run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
 
-        assert_eq!(cpu.read_reg(1), 10);
-        assert_eq!(cpu.program_counter, 4);
+        assert_eq!(machine.cpu.read_reg(1), 10);
+        assert_eq!(machine.cpu.program_counter, 4);
     }
 
     #[test]
     fn test_push_stack() {
-        let program = assemble(vec!["LoadImm H, 0x88", "LoadImm L, 0x77", "Push", "Halt"]);
+        let program = vec!["LoadImm H, 0x88", "LoadImm L, 0x77", "Push", "Halt"];
 
-        let mut cpu = Cpu::new(program);
-        run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
 
-        assert_eq!(cpu.pop_stack(), 0x8877);
+        assert_eq!(machine.cpu.pop_stack(), 0x8877);
     }
 
     #[test]
     fn test_pop_stack() {
-        let program = assemble(vec!["Call test", "Nop", "Nop", "Nop", "test: Pop", "Halt"]);
+        let program = vec!["Call test", "Nop", "Nop", "Nop", "test: Pop", "Halt"];
 
-        let mut cpu = Cpu::new(program);
-        run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
 
-        assert_eq!(cpu.get_hl_address(), 0x3);
+        assert_eq!(machine.cpu.get_hl_address(), 0x3);
     }
 
     #[test]
     fn test_select_beta() {
-        let program = assemble(vec![
+        let program = vec![
             "SelectBeta",
             "LoadImm A, 10",
             "SelectAlpha",
             "LoadImm A, 20",
             "SelectBeta",
             "Halt",
-        ]);
+        ];
 
-        let mut cpu = Cpu::new(program);
-        run_to_halt(&mut cpu);
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
 
-        assert_eq!(cpu.read_reg(0), 10);
-        assert_eq!(cpu.alpha_mode, false);
+        assert_eq!(machine.cpu.read_reg(0), 10);
+        assert_eq!(machine.cpu.alpha_mode, false);
     }
 
     #[test]

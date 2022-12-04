@@ -69,20 +69,20 @@ fn main() -> Result<()> {
         "Jump run",
     ]);
 
-    let mut cpu = Cpu::new(program.clone());
-    let disassembler = Disassembler::new(Cpu::new(program));
+    // let mut cpu = Cpu::new(program.clone());
+    // let disassembler = Disassembler::new(Cpu::new(program));
 
-    while !cpu.halted {
-        execute!(io::stdout(), terminal::Clear(terminal::ClearType::All))?;
-        let output = disassembler.get_lines(cpu.program_counter, 5, 2);
-        render_cpu_regs(&cpu);
-        render_cpu_flags(&cpu);
-        render_disassembler_out(output);
+    // while !cpu.halted {
+    //     execute!(io::stdout(), terminal::Clear(terminal::ClearType::All))?;
+    //     let output = disassembler.get_lines(cpu.program_counter, 5, 2);
+    //     render_cpu_regs(&cpu);
+    //     render_cpu_flags(&cpu);
+    //     render_disassembler_out(output);
 
-        event::read();
-        fetch_instruction(&mut cpu);
-        execute_instruction(&mut cpu);
-    }
+    //     event::read();
+    //     fetch_instruction(&mut cpu);
+    //     execute_instruction(&mut cpu);
+    // }
 
     Ok(())
 }

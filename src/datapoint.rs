@@ -15,7 +15,7 @@ use crate::{
 };
 
 pub struct Datapoint {
-    cpu: Cpu,
+    pub cpu: Cpu,
     clock: Clock,
     databus: Option<Databus>,
 }
@@ -48,11 +48,11 @@ impl Datapoint {
                     address: None,
                 },
                 stack: Vec::new(),
-                clock: Some(cpu_clock.1),
-                intr: Some(cpu_intr.1),
-                databus_command: Some(databus_command.0),
-                databus_output: Some(databus_out.clone()),
-                databus_input: Some(databus_in.clone()),
+                clock: cpu_clock.1,
+                intr: cpu_intr.1,
+                databus_command: databus_command.0,
+                databus_output: databus_out.clone(),
+                databus_input: databus_in.clone(),
             },
             clock: Clock {
                 time_scale,
