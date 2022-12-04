@@ -1,5 +1,12 @@
-use crate::{clock::*, instruction::*};
-use std::sync::mpsc::{Receiver, Sender};
+use crate::{
+    clock::*,
+    databus::{self, Dataline},
+    instruction::*,
+};
+use std::sync::{
+    mpsc::{Receiver, Sender},
+    RwLock,
+};
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -17,10 +24,13 @@ pub struct Cpu {
     pub stack: Vec<u16>,
     pub clock: Option<Receiver<u8>>,
     pub intr: Option<Receiver<u8>>,
+    pub databus_command: Option<Sender<Instruction>>,
+    pub databus_input: Option<Dataline>,
+    pub databus_output: Option<Dataline>,
 }
 
 impl Cpu {
-    pub fn new(mem: Vec<u8>, clock: Option<Receiver<u8>>, intr: Option<Receiver<u8>>) -> Cpu {
+    pub fn new(mem: Vec<u8>) -> Cpu {
         let mut cpu = Cpu {
             halted: false,
             intr_enabled: false,
@@ -39,8 +49,11 @@ impl Cpu {
                 address: None,
             },
             stack: Vec::new(),
-            clock: clock,
-            intr: intr,
+            clock: None,
+            intr: None,
+            databus_command: None,
+            databus_output: None,
+            databus_input: None,
         };
         for (i, b) in mem.iter().enumerate() {
             cpu.memory[i] = *b;
@@ -291,7 +304,12 @@ pub fn execute_instruction(cpu: &mut Cpu) {
             cpu.write_flag(0, (cpu.read_reg(0) & 0x1) == 0x1);
         }
         InstructionType::Nop => {}
-        InstructionType::Halt => cpu.halted = true,
+        InstructionType::Halt => {
+            cpu.halted = true;
+            if let Some(databus) = &cpu.databus_command {
+                databus.send(*inst);
+            }
+        }
         InstructionType::Pop => {
             let value = cpu.pop_stack();
             cpu.write_reg(5, ((value >> 8) & 0xff) as u8);
@@ -315,10 +333,33 @@ pub fn execute_instruction(cpu: &mut Cpu) {
             cpu.alpha_mode = false;
         }
         InstructionType::Unknown => panic!("Unknown instruction"),
-        InstructionType::Input => unimplemented!(),
-        InstructionType::Adr => todo!(),
-        InstructionType::Status => todo!(),
-        InstructionType::Data => todo!(),
+        InstructionType::Input => {
+            if let Some(databus_output) = &(cpu.databus_output.clone()) {
+                if let Ok(val) = databus_output.read() {
+                    cpu.write_reg(0, *val);
+                }
+            }
+        }
+        InstructionType::Adr => {
+            if let Some(databus_command) = &cpu.databus_command {
+                if let Some(databus_input) = &cpu.databus_input {
+                    if let Ok(mut val) = databus_input.write() {
+                        *val = cpu.read_reg(0);
+                    }
+                }
+                databus_command.send(*inst);
+            }
+        }
+        InstructionType::Status => {
+            if let Some(databus_command) = &cpu.databus_command {
+                databus_command.send(*inst);
+            }
+        }
+        InstructionType::Data => {
+            if let Some(databus_command) = &cpu.databus_command {
+                databus_command.send(*inst);
+            }
+        }
         InstructionType::Write => todo!(),
         InstructionType::Com1 => todo!(),
         InstructionType::Com2 => todo!(),
@@ -424,7 +465,28 @@ pub fn fetch_instruction(cpu: &mut Cpu) {
         (0, 4, 0) => (InstructionType::DisableInts, None, None),
         (0, 3, 0) => (InstructionType::SelectAlpha, None, None),
         (0, 2, 0) => (InstructionType::SelectBeta, None, None),
-        (_, _, _) => panic!("Unknown instruction"),
+        (_, _, _) => match inst.opcode {
+            0o121 => (InstructionType::Adr, None, None),
+            0o123 => (InstructionType::Status, None, None),
+            0o125 => (InstructionType::Data, None, None),
+            0o127 => (InstructionType::Write, None, None),
+            0o131 => (InstructionType::Com1, None, None),
+            0o133 => (InstructionType::Com2, None, None),
+            0o135 => (InstructionType::Com3, None, None),
+            0o137 => (InstructionType::Com4, None, None),
+            0o151 => (InstructionType::Beep, None, None),
+            0o153 => (InstructionType::Click, None, None),
+            0o155 => (InstructionType::Deck1, None, None),
+            0o157 => (InstructionType::Deck2, None, None),
+            0o161 => (InstructionType::Rbk, None, None),
+            0o163 => (InstructionType::Wbk, None, None),
+            0o167 => (InstructionType::Bsp, None, None),
+            0o171 => (InstructionType::Sf, None, None),
+            0o173 => (InstructionType::Sb, None, None),
+            0o175 => (InstructionType::Rewind, None, None),
+            0o177 => (InstructionType::Tstop, None, None),
+            _ => panic!("Unknown inst"),
+        },
     };
     inst.address = address;
     inst.instruction_type = inst_type;
@@ -454,7 +516,7 @@ mod tests {
     #[test]
     fn test_fetch_add_inst() {
         let program = assemble(vec!["Add 2"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         fetch_instruction(&mut cpu);
         assert_eq!(
             cpu.instruction_register.instruction_type,
@@ -467,7 +529,7 @@ mod tests {
     #[test]
     fn test_load_imm_inst() {
         let program = assemble(vec!["LoadImm A, 10"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         fetch_instruction(&mut cpu);
         execute_instruction(&mut cpu);
         assert_eq!(cpu.alpha_registers[0], 10);
@@ -476,7 +538,7 @@ mod tests {
     #[test]
     fn test_load_reg_to_reg_inst() {
         let program = assemble(vec!["LoadImm A, 10", "Load B, A", "Halt"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
 
         run_to_halt(&mut cpu);
 
@@ -486,7 +548,7 @@ mod tests {
     #[test]
     fn test_add_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 10", "Halt"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
 
         run_to_halt(&mut cpu);
 
@@ -500,7 +562,7 @@ mod tests {
     #[test]
     fn test_add_odd_parity_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 11", "Halt"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
 
         run_to_halt(&mut cpu);
 
@@ -514,7 +576,7 @@ mod tests {
     #[test]
     fn test_add_sign_flag_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 138", "Halt"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
 
         run_to_halt(&mut cpu);
 
@@ -527,7 +589,7 @@ mod tests {
     #[test]
     fn test_add_zero_and_overflow_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
 
         run_to_halt(&mut cpu);
 
@@ -541,7 +603,7 @@ mod tests {
     fn test_sub_underflow() {
         let program = assemble(vec!["LoadImm A, 10", "SubImm 11", "Halt"]);
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.read_flag(0), true);
@@ -558,7 +620,7 @@ mod tests {
             "Halt",              // -1                       =  1
         ]); //                                                 24 total
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         let insts_cnt = run_to_halt(&mut cpu);
         assert_eq!(insts_cnt, 24);
     }
@@ -572,7 +634,7 @@ mod tests {
             "test: Halt", // addr 5
         ]);
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.pop_stack(), 4);
@@ -583,7 +645,7 @@ mod tests {
     fn test_return() {
         let program = assemble(vec!["Call test", "Halt", "test: LoadImm B, 10", "Return"]);
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.read_reg(1), 10);
@@ -594,7 +656,7 @@ mod tests {
     fn test_push_stack() {
         let program = assemble(vec!["LoadImm H, 0x88", "LoadImm L, 0x77", "Push", "Halt"]);
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.pop_stack(), 0x8877);
@@ -604,7 +666,7 @@ mod tests {
     fn test_pop_stack() {
         let program = assemble(vec!["Call test", "Nop", "Nop", "Nop", "test: Pop", "Halt"]);
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.get_hl_address(), 0x3);
@@ -621,7 +683,7 @@ mod tests {
             "Halt",
         ]);
 
-        let mut cpu = Cpu::new(program, None, None);
+        let mut cpu = Cpu::new(program);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.read_reg(0), 10);
