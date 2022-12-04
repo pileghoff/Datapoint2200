@@ -1,34 +1,40 @@
-use std::{
-    thread,
-    time::{self, Instant},
-};
+use core::time;
+use std::sync::mpsc::Sender;
 
-#[derive(Debug, Clone, Copy)]
+use std::thread;
+use std::thread::JoinHandle;
+
+#[derive(Debug, Clone)]
 pub struct Clock {
     pub time_scale: f32,
     pub current_time: usize,
+    pub cpu_clock: Sender<u8>,
+    pub cpu_intr: Sender<u8>,
 }
 
 const INTR_TIME: usize = 1_000_000;
 
 impl Clock {
-    pub fn new(time_scale: f32) -> Clock {
-        Clock {
-            time_scale,
-            current_time: 0,
-        }
-    }
+    pub fn run(&mut self) -> JoinHandle<()> {
+        let mut clock = self.clone();
+        thread::spawn(move || {
+            let to_sleep = time::Duration::new(0, (1600.0 * clock.time_scale) as u32);
 
-    pub fn clock(&mut self, cycles: usize) -> bool {
-        let elapsed_time_nano = cycles * 1600;
-        let elapsed_time_scaled = (((cycles * 1600) as f32) * self.time_scale) as u128;
-        let duration = time::Duration::new(0, elapsed_time_scaled as u32);
-        thread::sleep(duration);
-        let intr_trigger =
-            (self.current_time % INTR_TIME) > (self.current_time + elapsed_time_nano) % INTR_TIME;
+            loop {
+                thread::sleep(to_sleep);
+                let running = clock.cpu_clock.send(0);
+                if running.is_err() {
+                    break;
+                }
 
-        self.current_time += elapsed_time_nano;
+                let intr_trigger =
+                    (clock.current_time % INTR_TIME) > (clock.current_time + 1600) % INTR_TIME;
+                if intr_trigger {
+                    clock.cpu_intr.send(0);
+                }
 
-        intr_trigger
+                clock.current_time += 1600;
+            }
+        })
     }
 }

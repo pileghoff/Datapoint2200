@@ -1,6 +1,7 @@
 use crate::{clock::*, instruction::*};
+use std::sync::mpsc::{Receiver, Sender};
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct Cpu {
     pub halted: bool,
     pub intr_enabled: bool,
@@ -14,11 +15,12 @@ pub struct Cpu {
     pub program_counter: u16,
     pub instruction_register: Instruction,
     pub stack: Vec<u16>,
-    pub clock: Clock,
+    pub clock: Option<Receiver<u8>>,
+    pub intr: Option<Receiver<u8>>,
 }
 
 impl Cpu {
-    pub fn new(mem: Vec<u8>) -> Cpu {
+    pub fn new(mem: Vec<u8>, clock: Option<Receiver<u8>>, intr: Option<Receiver<u8>>) -> Cpu {
         let mut cpu = Cpu {
             halted: false,
             intr_enabled: false,
@@ -37,7 +39,8 @@ impl Cpu {
                 address: None,
             },
             stack: Vec::new(),
-            clock: Clock::new(1.0),
+            clock: clock,
+            intr: intr,
         };
         for (i, b) in mem.iter().enumerate() {
             cpu.memory[i] = *b;
@@ -111,7 +114,7 @@ impl Cpu {
 }
 
 pub fn execute_instruction(cpu: &mut Cpu) {
-    let inst = &cpu.clone().instruction_register;
+    let inst = &cpu.instruction_register.clone();
     let hl = cpu.get_hl_address();
     let s = inst.get_source();
     let d = inst.get_destination();
@@ -334,16 +337,26 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::Tstop => todo!(),
     };
 
-    // If the clock passes the 1 ms mark or we have a saved up interrupt
-    if cpu.clock.clock(inst.get_clock_cycles()) || cpu.intr_saved {
+    if let Some(clock) = &cpu.clock {
+        for i in 0..inst.get_clock_cycles() {
+            clock.recv().unwrap();
+        }
+    }
+
+    if let Some(intr) = &cpu.intr {
+        let intr_happened = intr.try_recv();
+        if intr_happened.is_ok() {
+            cpu.intr_saved = true;
+        };
+    }
+
+    if cpu.intr_saved {
         // If interrupts are enabled, and we did not enable this cycle
         if cpu.intr_enabled && inst.instruction_type != InstructionType::EnableIntr {
             // Interrupt triggered
             cpu.push_stack(cpu.program_counter);
             cpu.program_counter = 0;
             cpu.intr_saved = false;
-        } else {
-            cpu.intr_saved = true;
         }
     }
 }
@@ -436,12 +449,12 @@ mod tests {
     use std::time;
 
     use super::*;
-    use crate::assembler::assemble;
+    use crate::{assembler::assemble, datapoint::Datapoint};
 
     #[test]
     fn test_fetch_add_inst() {
         let program = assemble(vec!["Add 2"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         fetch_instruction(&mut cpu);
         assert_eq!(
             cpu.instruction_register.instruction_type,
@@ -454,7 +467,7 @@ mod tests {
     #[test]
     fn test_load_imm_inst() {
         let program = assemble(vec!["LoadImm A, 10"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         fetch_instruction(&mut cpu);
         execute_instruction(&mut cpu);
         assert_eq!(cpu.alpha_registers[0], 10);
@@ -463,7 +476,7 @@ mod tests {
     #[test]
     fn test_load_reg_to_reg_inst() {
         let program = assemble(vec!["LoadImm A, 10", "Load B, A", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
 
         run_to_halt(&mut cpu);
 
@@ -473,7 +486,7 @@ mod tests {
     #[test]
     fn test_add_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 10", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
 
         run_to_halt(&mut cpu);
 
@@ -487,7 +500,7 @@ mod tests {
     #[test]
     fn test_add_odd_parity_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 11", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
 
         run_to_halt(&mut cpu);
 
@@ -501,7 +514,7 @@ mod tests {
     #[test]
     fn test_add_sign_flag_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 138", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
 
         run_to_halt(&mut cpu);
 
@@ -514,7 +527,7 @@ mod tests {
     #[test]
     fn test_add_zero_and_overflow_inst() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
 
         run_to_halt(&mut cpu);
 
@@ -528,7 +541,7 @@ mod tests {
     fn test_sub_underflow() {
         let program = assemble(vec!["LoadImm A, 10", "SubImm 11", "Halt"]);
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.read_flag(0), true);
@@ -545,7 +558,7 @@ mod tests {
             "Halt",              // -1                       =  1
         ]); //                                                 24 total
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         let insts_cnt = run_to_halt(&mut cpu);
         assert_eq!(insts_cnt, 24);
     }
@@ -559,7 +572,7 @@ mod tests {
             "test: Halt", // addr 5
         ]);
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.pop_stack(), 4);
@@ -570,7 +583,7 @@ mod tests {
     fn test_return() {
         let program = assemble(vec!["Call test", "Halt", "test: LoadImm B, 10", "Return"]);
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.read_reg(1), 10);
@@ -581,7 +594,7 @@ mod tests {
     fn test_push_stack() {
         let program = assemble(vec!["LoadImm H, 0x88", "LoadImm L, 0x77", "Push", "Halt"]);
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.pop_stack(), 0x8877);
@@ -591,7 +604,7 @@ mod tests {
     fn test_pop_stack() {
         let program = assemble(vec!["Call test", "Nop", "Nop", "Nop", "test: Pop", "Halt"]);
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.get_hl_address(), 0x3);
@@ -608,7 +621,7 @@ mod tests {
             "Halt",
         ]);
 
-        let mut cpu = Cpu::new(program);
+        let mut cpu = Cpu::new(program, None, None);
         run_to_halt(&mut cpu);
 
         assert_eq!(cpu.read_reg(0), 10);
@@ -617,19 +630,17 @@ mod tests {
 
     #[test]
     fn test_clock() {
-        let program = assemble(vec![
+        let program = vec![
             "SelectBeta",    // 2
             "LoadImm A, 10", // 2
             "SelectAlpha",   // 2
             "LoadImm A, 20", // 2
             "SelectBeta",    // 2
             "Halt",          // 0
-        ]);
-
-        let mut cpu = Cpu::new(program);
-        cpu.clock.time_scale = 1000.0; // Slow down 1000 times
+        ];
+        let mut machine = Datapoint::new(program, 1000.0);
         let start = time::Instant::now();
-        run_to_halt(&mut cpu);
+        machine.run();
         let elapsed = start.elapsed();
         // 10 cycles, at 1000 times slowdown should take = 16000 us
         print!("{}", elapsed.as_micros());
@@ -639,7 +650,7 @@ mod tests {
 
     #[test]
     fn test_intr() {
-        let program = assemble(vec![
+        let program = vec![
             "CompImm 1",      // Carry flag gets set if A is 0 (First time)
             "JumpIf Cf, run", // Jump if A was 0
             "Halt",           // Only halt, only get here if the interrupts actually works
@@ -647,18 +658,11 @@ mod tests {
             "EnableIntr",
             "Nop",
             "Jump run",
-        ]);
+        ];
 
-        let mut cpu = Cpu::new(program);
+        let mut machine = Datapoint::new(program, 1000.0);
 
-        let mut counter = 0;
-        while !cpu.halted {
-            counter += 1;
-            fetch_instruction(&mut cpu);
-            execute_instruction(&mut cpu);
-            if counter > 254 {
-                assert!(false);
-            }
-        }
+        let counter = machine.run();
+        println!("{}", counter);
     }
 }

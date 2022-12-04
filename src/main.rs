@@ -3,6 +3,7 @@
 pub mod assembler;
 pub mod clock;
 pub mod cpu;
+pub mod datapoint;
 pub mod disassembler;
 pub mod instruction;
 use assembler::assemble;
@@ -67,8 +68,8 @@ fn main() -> Result<()> {
         "Jump run",
     ]);
 
-    let mut cpu = Cpu::new(program);
-    let disassembler = Disassembler::new(cpu.clone());
+    let mut cpu = Cpu::new(program.clone(), None, None);
+    let disassembler = Disassembler::new(Cpu::new(program, None, None));
 
     while !cpu.halted {
         execute!(io::stdout(), terminal::Clear(terminal::ClearType::All))?;

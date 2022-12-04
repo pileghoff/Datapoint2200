@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn test_basics() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let cpu = Cpu::new(program);
+        let cpu = Cpu::new(program, None, None);
         let disassembler = Disassembler::new(cpu);
         let output = disassembler.get_lines(0, 3, 0);
         assert_eq!(
@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn test_lines_before() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let cpu = Cpu::new(program);
+        let cpu = Cpu::new(program, None, None);
         let disassembler = Disassembler::new(cpu);
         let output = disassembler.get_lines(2, 3, 1);
         assert_eq!(
@@ -176,7 +176,7 @@ mod tests {
     #[test]
     fn test_lines_before_neg() {
         let program = assemble(vec!["LoadImm A, 10", "AddImm 246", "Halt"]);
-        let cpu = Cpu::new(program);
+        let cpu = Cpu::new(program, None, None);
         let disassembler = Disassembler::new(cpu);
         let output = disassembler.get_lines(2, 3, 3);
         assert_eq!(
