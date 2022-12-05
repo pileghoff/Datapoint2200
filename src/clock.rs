@@ -34,13 +34,13 @@ impl Clock {
                 let intr_trigger = (clock.current_time % INTR_TIME_NS)
                     > (clock.current_time + CYCLE_TIME_NS) % INTR_TIME_NS;
                 if intr_trigger {
-                    clock.cpu_intr.send(0);
+                    clock.cpu_intr.send(0).unwrap();
                 }
 
                 let databus_trigger = (clock.current_time % DATABUS_CLOCK_NS)
                     > (clock.current_time + CYCLE_TIME_NS) % DATABUS_CLOCK_NS;
                 if databus_trigger {
-                    clock.databus_clock.send(0);
+                    clock.databus_clock.send(0).unwrap();
                 }
 
                 clock.current_time += CYCLE_TIME_NS;

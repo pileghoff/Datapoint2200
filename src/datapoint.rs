@@ -5,7 +5,6 @@ use crate::{
     clock::Clock,
     cpu::Cpu,
     databus::{Databus, DatabusMode, Dataline},
-    instruction::Instruction,
 };
 
 pub struct Datapoint {
@@ -20,7 +19,6 @@ impl Datapoint {
         let cpu_clock = channel::<u8>();
         let cpu_intr = channel::<u8>();
         let databus_clock = channel::<u8>();
-        let databus_command = channel::<Instruction>();
         let dataline = Dataline::generate_pair();
         let mut res = Datapoint {
             cpu: Cpu {

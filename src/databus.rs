@@ -52,7 +52,7 @@ impl Dataline {
     }
 
     pub fn send_command(&self, inst: Instruction) {
-        self.command_sender.send(inst);
+        self.command_sender.send(inst).unwrap();
     }
 
     pub fn get_command(&self) -> Result<Instruction, TryRecvError> {
@@ -119,7 +119,7 @@ impl Databus {
                 };
             }
 
-            return self;
+            self
         })
     }
 }

@@ -1,12 +1,5 @@
-use crate::{
-    clock::*,
-    databus::{self, Dataline},
-    instruction::*,
-};
-use std::sync::{
-    mpsc::{Receiver, Sender},
-    RwLock,
-};
+use crate::{databus::Dataline, instruction::*};
+use std::sync::mpsc::Receiver;
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -418,7 +411,7 @@ impl Cpu {
             InstructionType::Tstop => todo!(),
         };
 
-        for i in 0..inst.get_clock_cycles() {
+        for _i in 0..inst.get_clock_cycles() {
             self.clock.recv().unwrap();
         }
 
@@ -444,7 +437,7 @@ mod tests {
     use std::time;
 
     use super::*;
-    use crate::{assembler::assemble, datapoint::Datapoint};
+    use crate::datapoint::Datapoint;
 
     #[test]
     fn test_fetch_add_inst() {
@@ -482,10 +475,10 @@ mod tests {
         machine.run();
 
         assert_eq!(machine.cpu.read_reg(0), 20);
-        assert_eq!(machine.cpu.read_flag(0), false);
-        assert_eq!(machine.cpu.read_flag(1), false);
-        assert_eq!(machine.cpu.read_flag(2), false);
-        assert_eq!(machine.cpu.read_flag(3), false);
+        assert!(!machine.cpu.read_flag(0));
+        assert!(!machine.cpu.read_flag(1));
+        assert!(!machine.cpu.read_flag(2));
+        assert!(!machine.cpu.read_flag(3));
     }
 
     #[test]
@@ -496,10 +489,10 @@ mod tests {
         machine.run();
 
         assert_eq!(machine.cpu.read_reg(0), 21);
-        assert_eq!(machine.cpu.read_flag(0), false);
-        assert_eq!(machine.cpu.read_flag(1), false);
-        assert_eq!(machine.cpu.read_flag(2), false);
-        assert_eq!(machine.cpu.read_flag(3), true);
+        assert!(!machine.cpu.read_flag(0));
+        assert!(!machine.cpu.read_flag(1));
+        assert!(!machine.cpu.read_flag(2));
+        assert!(machine.cpu.read_flag(3));
     }
 
     #[test]
@@ -509,10 +502,10 @@ mod tests {
 
         machine.run();
 
-        assert_eq!(machine.cpu.read_flag(0), false);
-        assert_eq!(machine.cpu.read_flag(1), false);
-        assert_eq!(machine.cpu.read_flag(2), true);
-        assert_eq!(machine.cpu.read_flag(3), true);
+        assert!(!machine.cpu.read_flag(0));
+        assert!(!machine.cpu.read_flag(1));
+        assert!(machine.cpu.read_flag(2));
+        assert!(machine.cpu.read_flag(3));
     }
 
     #[test]
@@ -522,10 +515,10 @@ mod tests {
 
         machine.run();
 
-        assert_eq!(machine.cpu.read_flag(0), true);
-        assert_eq!(machine.cpu.read_flag(1), true);
-        assert_eq!(machine.cpu.read_flag(2), false);
-        assert_eq!(machine.cpu.read_flag(3), false);
+        assert!(machine.cpu.read_flag(0));
+        assert!(machine.cpu.read_flag(1));
+        assert!(!machine.cpu.read_flag(2));
+        assert!(!machine.cpu.read_flag(3));
     }
 
     #[test]
@@ -535,7 +528,7 @@ mod tests {
         let mut machine = Datapoint::new(program, 1.0);
         machine.run();
 
-        assert_eq!(machine.cpu.read_flag(0), true);
+        assert!(machine.cpu.read_flag(0));
         assert_eq!(machine.cpu.read_reg(0) as i8, -1);
     }
 
@@ -616,7 +609,7 @@ mod tests {
         machine.run();
 
         assert_eq!(machine.cpu.read_reg(0), 10);
-        assert_eq!(machine.cpu.alpha_mode, false);
+        assert!(!machine.cpu.alpha_mode);
     }
 
     #[test]

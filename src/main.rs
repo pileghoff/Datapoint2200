@@ -7,16 +7,11 @@ pub mod databus;
 pub mod datapoint;
 pub mod disassembler;
 pub mod instruction;
-use assembler::assemble;
-use cpu::Cpu;
-use crossterm::{
-    cursor, event, execute,
-    style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
-    terminal, ExecutableCommand, Result,
-};
 
-use disassembler::Disassembler;
-use instruction::{InstructionType, FLAG_NAME, REG_NAME};
+use cpu::Cpu;
+use crossterm::{cursor, ExecutableCommand, Result};
+
+use instruction::{FLAG_NAME, REG_NAME};
 use std::io;
 
 fn render_disassembler_out(lines: Vec<String>) {
@@ -53,36 +48,5 @@ fn render_cpu_flags(cpu: &Cpu) {
 }
 
 fn main() -> Result<()> {
-    // let program = assemble(vec![
-    //     "LoadImm A, 10",
-    //     "loop: SubImm 1",
-    //     "JumpIfNot 0, loop",
-    //     "Halt",
-    // ]);
-    let program = assemble(vec![
-        "CompImm 1",      // Carry flag gets set if A is 0 (First time)
-        "JumpIf Cf, run", // Jump if A was 0
-        "Halt",           // Only halt, only get here if the interrupts actually works
-        "run: LoadImm A, 1",
-        "EnableIntr",
-        "Nop",
-        "Jump run",
-    ]);
-
-    // let mut cpu = Cpu::new(program.clone());
-    // let disassembler = Disassembler::new(Cpu::new(program));
-
-    // while !cpu.halted {
-    //     execute!(io::stdout(), terminal::Clear(terminal::ClearType::All))?;
-    //     let output = disassembler.get_lines(cpu.program_counter, 5, 2);
-    //     render_cpu_regs(&cpu);
-    //     render_cpu_flags(&cpu);
-    //     render_disassembler_out(output);
-
-    //     event::read();
-    //     fetch_instruction(&mut cpu);
-    //     execute_instruction(&mut cpu);
-    // }
-
     Ok(())
 }
