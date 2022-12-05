@@ -1,17 +1,11 @@
-use std::{
-    sync::{
-        mpsc::{channel, Receiver, Sender},
-        RwLock,
-    },
-    thread,
-};
+use std::sync::mpsc::channel;
 
 use crate::{
     assembler::assemble,
     clock::Clock,
-    cpu::{execute_instruction, fetch_instruction, Cpu},
+    cpu::Cpu,
     databus::{Databus, DatabusMode, Dataline},
-    instruction::{Instruction, InstructionType},
+    instruction::Instruction,
 };
 
 pub struct Datapoint {
@@ -40,12 +34,6 @@ impl Datapoint {
                 beta_registers: [0, 0, 0, 0, 0, 0, 0],
                 beta_flipflops: [false, false, false, false],
                 program_counter: 0,
-                instruction_register: Instruction {
-                    instruction_type: InstructionType::Unknown,
-                    opcode: 0,
-                    operand: None,
-                    address: None,
-                },
                 stack: Vec::new(),
                 clock: cpu_clock.1,
                 intr: cpu_intr.1,
@@ -79,8 +67,7 @@ impl Datapoint {
         let databus_handle = self.databus.take().unwrap().run();
         while !self.cpu.halted {
             counter += 1;
-            fetch_instruction(&mut self.cpu);
-            execute_instruction(&mut self.cpu);
+            self.cpu.execute_instruction();
         }
 
         self.databus = Some(databus_handle.join().unwrap());

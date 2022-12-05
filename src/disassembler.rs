@@ -2,7 +2,7 @@ use std::cmp::max;
 
 use crate::{
     cpu::*,
-    instruction::{InstructionType, FLAG_NAME, REG_NAME},
+    instruction::{Instruction, InstructionType, FLAG_NAME, REG_NAME},
 };
 #[derive(Debug, Clone)]
 pub struct Disassembler {
@@ -15,11 +15,15 @@ impl Disassembler {
             addr_to_line: Vec::new(),
         };
         cpu.program_counter = 0;
-        cpu.instruction_register.instruction_type = InstructionType::Add;
-        while cpu.instruction_register.instruction_type != InstructionType::Unknown {
+        let mut inst = Instruction {
+            instruction_type: InstructionType::Add,
+            opcode: 0,
+            operand: None,
+            address: None,
+        };
+        while inst.instruction_type != InstructionType::Unknown {
             let program_counter = cpu.program_counter;
-            fetch_instruction(&mut cpu);
-            let inst = cpu.instruction_register;
+            inst = cpu.fetch_instruction();
             let d = REG_NAME[inst.get_destination() as usize];
             let s = REG_NAME[inst.get_source() as usize];
             let c = FLAG_NAME[inst.get_destination() as usize];
@@ -138,7 +142,7 @@ impl Disassembler {
 mod tests {
     use std::vec;
 
-    use crate::{assembler::assemble, datapoint::Datapoint};
+    use crate::datapoint::Datapoint;
 
     use super::*;
     #[test]

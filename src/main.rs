@@ -8,7 +8,7 @@ pub mod datapoint;
 pub mod disassembler;
 pub mod instruction;
 use assembler::assemble;
-use cpu::{execute_instruction, fetch_instruction, Cpu};
+use cpu::Cpu;
 use crossterm::{
     cursor, event, execute,
     style::{Color, Print, ResetColor, SetBackgroundColor, SetForegroundColor},
