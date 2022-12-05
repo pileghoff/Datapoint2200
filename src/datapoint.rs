@@ -27,8 +27,7 @@ impl Datapoint {
         let cpu_intr = channel::<u8>();
         let databus_clock = channel::<u8>();
         let databus_command = channel::<Instruction>();
-        let databus_in = Dataline::new(RwLock::new(0));
-        let databus_out = Dataline::new(RwLock::new(0));
+        let dataline = Dataline::generate_pair();
         let mut res = Datapoint {
             cpu: Cpu {
                 halted: false,
@@ -50,9 +49,7 @@ impl Datapoint {
                 stack: Vec::new(),
                 clock: cpu_clock.1,
                 intr: cpu_intr.1,
-                databus_command: databus_command.0,
-                databus_output: databus_out.clone(),
-                databus_input: databus_in.clone(),
+                dataline: dataline.0,
             },
             clock: Clock {
                 time_scale,
@@ -65,9 +62,7 @@ impl Datapoint {
                 selected_addr: 0,
                 selected_mode: DatabusMode::Status,
                 clock: databus_clock.1,
-                command: databus_command.1,
-                data_output: databus_out,
-                data_input: databus_in,
+                dataline: dataline.1,
             }),
         };
 

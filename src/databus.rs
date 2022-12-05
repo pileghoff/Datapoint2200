@@ -1,5 +1,5 @@
 use std::{
-    sync::mpsc::{Receiver, Sender, TryRecvError},
+    sync::mpsc::{channel, Receiver, Sender, TryRecvError},
     sync::{Arc, RwLock},
     thread::{self, JoinHandle},
 };
@@ -12,16 +12,60 @@ pub enum DatabusMode {
     Status,
 }
 
-pub type Dataline = Arc<RwLock<u8>>;
+#[derive(Debug)]
+pub struct Dataline {
+    writer: Arc<RwLock<u8>>,
+    reader: Arc<RwLock<u8>>,
+    command_sender: Sender<Instruction>,
+    command_receiver: Receiver<Instruction>,
+}
+
+impl Dataline {
+    pub fn generate_pair() -> (Dataline, Dataline) {
+        let left = Arc::new(RwLock::new(0));
+        let right = Arc::new(RwLock::new(0));
+        let command_left = channel();
+        let command_right = channel();
+
+        (
+            Dataline {
+                writer: left.clone(),
+                reader: right.clone(),
+                command_sender: command_left.0,
+                command_receiver: command_right.1,
+            },
+            Dataline {
+                writer: right,
+                reader: left,
+                command_sender: command_right.0,
+                command_receiver: command_left.1,
+            },
+        )
+    }
+
+    pub fn read(&self) -> u8 {
+        *self.reader.read().unwrap()
+    }
+
+    pub fn write(&mut self, val: u8) {
+        *self.writer.write().unwrap() = val;
+    }
+
+    pub fn send_command(&self, inst: Instruction) {
+        self.command_sender.send(inst);
+    }
+
+    pub fn get_command(&self) -> Result<Instruction, TryRecvError> {
+        self.command_receiver.try_recv()
+    }
+}
 
 #[derive(Debug)]
 pub struct Databus {
     pub selected_addr: u8,
     pub selected_mode: DatabusMode,
     pub clock: Receiver<u8>,
-    pub command: Receiver<Instruction>,
-    pub data_input: Dataline,
-    pub data_output: Dataline,
+    pub dataline: Dataline,
 }
 
 impl Databus {
@@ -36,15 +80,12 @@ impl Databus {
                     Err(TryRecvError::Disconnected) => break,
                 };
 
-                match self.command.try_recv() {
+                match self.dataline.get_command() {
                     Ok(inst) => match inst.instruction_type {
                         InstructionType::Adr => {
                             println!("Set addr");
-                            if let Ok(val) = self.data_input.read() {
-                                self.selected_addr = *val;
-                                self.selected_mode = DatabusMode::Status;
-                                println!("Set addr {}", *val);
-                            }
+                            self.selected_addr = self.dataline.read();
+                            self.selected_mode = DatabusMode::Status;
                         }
                         InstructionType::Status => {
                             self.selected_mode = DatabusMode::Status;

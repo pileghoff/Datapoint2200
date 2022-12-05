@@ -24,9 +24,7 @@ pub struct Cpu {
     pub stack: Vec<u16>,
     pub clock: Receiver<u8>,
     pub intr: Receiver<u8>,
-    pub databus_command: Sender<Instruction>,
-    pub databus_input: Dataline,
-    pub databus_output: Dataline,
+    pub dataline: Dataline,
 }
 
 impl Cpu {
@@ -274,7 +272,7 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         InstructionType::Nop => {}
         InstructionType::Halt => {
             cpu.halted = true;
-            cpu.databus_command.send(*inst);
+            cpu.dataline.send_command(*inst);
         }
         InstructionType::Pop => {
             let value = cpu.pop_stack();
@@ -300,21 +298,17 @@ pub fn execute_instruction(cpu: &mut Cpu) {
         }
         InstructionType::Unknown => panic!("Unknown instruction"),
         InstructionType::Input => {
-            if let Ok(val) = cpu.databus_output.clone().read() {
-                cpu.write_reg(0, *val);
-            }
+            cpu.write_reg(0, cpu.dataline.read());
         }
         InstructionType::Adr => {
-            if let Ok(mut val) = cpu.databus_input.write() {
-                *val = cpu.read_reg(0);
-            }
-            cpu.databus_command.send(*inst);
+            cpu.dataline.write(cpu.read_reg(0));
+            cpu.dataline.send_command(*inst);
         }
         InstructionType::Status => {
-            cpu.databus_command.send(*inst);
+            cpu.dataline.send_command(*inst);
         }
         InstructionType::Data => {
-            cpu.databus_command.send(*inst);
+            cpu.dataline.send_command(*inst);
         }
         InstructionType::Write => todo!(),
         InstructionType::Com1 => todo!(),
