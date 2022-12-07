@@ -9,7 +9,7 @@ use crate::{
 
 pub struct Datapoint {
     pub cpu: Cpu,
-    clock: Clock,
+    clock: Option<Clock>,
     databus: Option<Databus>,
 }
 
@@ -37,13 +37,13 @@ impl Datapoint {
                 intr: cpu_intr.1,
                 dataline: dataline.0,
             },
-            clock: Clock {
+            clock: Some(Clock {
                 time_scale,
                 current_time: 0,
                 cpu_clock: cpu_clock.0,
                 cpu_intr: cpu_intr.0,
                 databus_clock: databus_clock.0,
-            },
+            }),
             databus: Some(Databus {
                 selected_addr: 0,
                 selected_mode: DatabusMode::Status,
@@ -61,7 +61,7 @@ impl Datapoint {
 
     pub fn run(&mut self) -> usize {
         let mut counter = 0;
-        self.clock.run();
+        let clock_handle = self.clock.take().unwrap().run();
         let databus_handle = self.databus.take().unwrap().run();
         while !self.cpu.halted {
             counter += 1;

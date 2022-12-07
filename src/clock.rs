@@ -19,32 +19,33 @@ const INTR_TIME_NS: usize = 1_000_000;
 const DATABUS_CLOCK_NS: usize = 156_300 / CYCLE_TIME_NS;
 
 impl Clock {
-    pub fn run(&mut self) -> JoinHandle<()> {
-        let mut clock = self.clone();
+    fn check_trigger(&self, trigger_time: usize) -> bool {
+        (self.current_time % trigger_time) > ((self.current_time + CYCLE_TIME_NS) % trigger_time)
+    }
+
+    pub fn run(mut self) -> JoinHandle<Clock> {
         thread::spawn(move || {
-            let to_sleep = time::Duration::new(0, (CYCLE_TIME_NS as f32 * clock.time_scale) as u32);
+            let to_sleep = time::Duration::new(0, (CYCLE_TIME_NS as f32 * self.time_scale) as u32);
 
             loop {
                 thread::sleep(to_sleep);
-                let running = clock.cpu_clock.send(0);
+                let running = self.cpu_clock.send(0);
                 if running.is_err() {
                     break;
                 }
 
-                let intr_trigger = (clock.current_time % INTR_TIME_NS)
-                    > (clock.current_time + CYCLE_TIME_NS) % INTR_TIME_NS;
-                if intr_trigger {
-                    clock.cpu_intr.send(0).unwrap();
+                if self.check_trigger(INTR_TIME_NS) {
+                    self.cpu_intr.send(0).unwrap();
                 }
 
-                let databus_trigger = (clock.current_time % DATABUS_CLOCK_NS)
-                    > (clock.current_time + CYCLE_TIME_NS) % DATABUS_CLOCK_NS;
-                if databus_trigger {
-                    clock.databus_clock.send(0).unwrap();
+                if self.check_trigger(DATABUS_CLOCK_NS) {
+                    self.databus_clock.send(0).unwrap();
                 }
 
-                clock.current_time += CYCLE_TIME_NS;
+                self.current_time += CYCLE_TIME_NS;
             }
+
+            self
         })
     }
 }
