@@ -183,7 +183,11 @@ impl OpParser {
 
     fn op(&mut self) -> u8 {
         self.counter += 1;
-        parse::<u8>(&self.ops[self.counter - 1]).unwrap()
+        let val = self.ops[self.counter - 1].clone();
+        if val.starts_with("'") {
+            return val.as_str().chars().nth(1).unwrap() as u8;
+        }
+        parse::<u8>(&val).unwrap()
     }
 
     fn lsp(&self) -> u8 {
@@ -271,6 +275,25 @@ fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Vec<u8> {
     }
 }
 
+fn parse_data(line: &str) -> Vec<u8> {
+    let line = line.replacen("DATA ", "", 1);
+    let tokens = line.split(',');
+    let mut res = Vec::new();
+    for token in tokens {
+        // If a string of ascii
+        if token.starts_with('\"') && token.ends_with('\"') {
+            let chars = token.get(1..token.len() - 1).unwrap();
+            for c in chars.as_bytes() {
+                res.push(*c);
+            }
+        } else {
+            res.push(parse::<u8>(token).unwrap());
+        }
+    }
+
+    res
+}
+
 // Take an iterator of lines of assembly and generates a list of (label, address) pairs
 // that can be used in a second pass to generate the final bytecode
 fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<(String, u16)> {
@@ -280,9 +303,6 @@ fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<(String, u1
         let mut line = String::from(line);
         remove_comment(&mut line);
         strip(&mut line);
-        if line.is_empty() {
-            continue;
-        }
         let (label, address) = get_label_or_address(&mut line);
         if let Some(label) = label {
             label_list.push((label.to_owned(), current_address));
@@ -295,8 +315,16 @@ fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<(String, u1
             current_address = address;
         }
 
+        if line.is_empty() {
+            continue;
+        }
+
         strip(&mut line);
-        current_address += get_instruction_byte_size(get_instruction(&line));
+        if get_instruction(&line) == "DATA" {
+            current_address += parse_data(&line).len() as u16;
+        } else {
+            current_address += get_instruction_byte_size(get_instruction(&line));
+        }
     }
 
     label_list
@@ -327,16 +355,21 @@ pub fn assemble(lines: Vec<&str>) -> Vec<u8> {
         let mut line = String::from(line);
         remove_comment(&mut line);
         strip(&mut line);
-        if line.is_empty() {
-            continue;
-        }
         let (_, address) = get_label_or_address(&mut line);
         if let Some(address) = address {
             current_address = address;
         }
 
         strip(&mut line);
-        let inst = parse_instruction(&line, &label_list);
+
+        if line.is_empty() {
+            continue;
+        }
+        let inst = if get_instruction(&line) == "DATA" {
+            parse_data(&line)
+        } else {
+            parse_instruction(&line, &label_list)
+        };
         for b in inst.into_iter() {
             insert_and_extend(&mut res, b, current_address as usize);
             current_address += 1;
@@ -464,5 +497,12 @@ mod tests {
         let program = vec!["Add C", "label1: Sub 2", "10: Jump label1"];
         let res = assemble(program);
         assert_eq!(res, vec![0x82, 0x92, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 1, 0]);
+    }
+
+    #[test]
+    fn test_parse_ascii() {
+        let program = vec!["LoadImm A, 'C'"];
+        let res = assemble(program);
+        assert_eq!(res, vec![0x6, 0x43]);
     }
 }

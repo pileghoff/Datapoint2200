@@ -1,10 +1,14 @@
 use std::{
     sync::mpsc::{channel, Receiver, Sender, TryRecvError},
     sync::{Arc, RwLock},
-    thread::{self, JoinHandle},
+    thread::{spawn, JoinHandle},
 };
 
-use crate::instruction::{Instruction, InstructionType};
+use crate::screen::Screen;
+use crate::{
+    instruction::{Instruction, InstructionType},
+    screen::SCREEN_ADDR,
+};
 
 #[derive(Debug, PartialEq, Eq)]
 pub enum DatabusMode {
@@ -66,11 +70,12 @@ pub struct Databus {
     pub selected_mode: DatabusMode,
     pub clock: Receiver<u8>,
     pub dataline: Dataline,
+    pub screen: Screen,
 }
 
 impl Databus {
     pub fn run(mut self) -> JoinHandle<Databus> {
-        thread::spawn(move || {
+        spawn(move || {
             loop {
                 match self.clock.try_recv() {
                     Ok(_) => {
@@ -93,10 +98,26 @@ impl Databus {
                         InstructionType::Data => {
                             self.selected_mode = DatabusMode::Data;
                         }
-                        InstructionType::Write => todo!(),
-                        InstructionType::Com1 => todo!(),
-                        InstructionType::Com2 => todo!(),
-                        InstructionType::Com3 => todo!(),
+                        InstructionType::Write => {
+                            if self.selected_addr == SCREEN_ADDR {
+                                self.screen.write(self.dataline.read());
+                            }
+                        }
+                        InstructionType::Com1 => {
+                            if self.selected_addr == SCREEN_ADDR {
+                                self.screen.control_word(self.dataline.read());
+                            }
+                        }
+                        InstructionType::Com2 => {
+                            if self.selected_addr == SCREEN_ADDR {
+                                self.screen.set_horizontal(self.dataline.read());
+                            }
+                        }
+                        InstructionType::Com3 => {
+                            if self.selected_addr == SCREEN_ADDR {
+                                self.screen.set_vertical(self.dataline.read());
+                            }
+                        }
                         InstructionType::Com4 => todo!(),
                         InstructionType::Beep => todo!(),
                         InstructionType::Click => todo!(),

@@ -5,12 +5,13 @@ use crate::{
     clock::Clock,
     cpu::Cpu,
     databus::{Databus, DatabusMode, Dataline},
+    screen::Screen,
 };
 
 pub struct Datapoint {
     pub cpu: Cpu,
-    clock: Option<Clock>,
-    databus: Option<Databus>,
+    pub clock: Option<Clock>,
+    pub databus: Option<Databus>,
 }
 
 impl Datapoint {
@@ -49,6 +50,7 @@ impl Datapoint {
                 selected_mode: DatabusMode::Status,
                 clock: databus_clock.1,
                 dataline: dataline.1,
+                screen: Screen::new(),
             }),
         };
 
@@ -87,5 +89,16 @@ mod tests {
         let db = machine.databus.take().unwrap();
         assert_eq!(db.selected_addr, 0x69);
         assert_eq!(db.selected_mode, DatabusMode::Status);
+    }
+
+    #[test]
+    fn test_write_to_screen() {
+        let program = vec!["LoadImm A, 0xf0", "Adr", "LoadImm A, 0x5a", "Write", "Halt"];
+
+        let mut machine = Datapoint::new(program, 1.0);
+        machine.run();
+        let db = machine.databus.take().unwrap();
+        assert_eq!(db.selected_addr, 0xf0);
+        assert_eq!(db.screen.buffer[0][0], 'Z');
     }
 }

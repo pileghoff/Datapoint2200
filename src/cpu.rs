@@ -384,7 +384,6 @@ impl Cpu {
                 self.write_reg(0, self.dataline.read());
             }
             InstructionType::Adr => {
-                self.dataline.write(self.read_reg(0));
                 self.dataline.send_command(*inst);
             }
             InstructionType::Status => {
@@ -393,11 +392,21 @@ impl Cpu {
             InstructionType::Data => {
                 self.dataline.send_command(*inst);
             }
-            InstructionType::Write => todo!(),
-            InstructionType::Com1 => todo!(),
-            InstructionType::Com2 => todo!(),
-            InstructionType::Com3 => todo!(),
-            InstructionType::Com4 => todo!(),
+            InstructionType::Write => {
+                self.dataline.send_command(*inst);
+            }
+            InstructionType::Com1 => {
+                self.dataline.send_command(*inst);
+            }
+            InstructionType::Com2 => {
+                self.dataline.send_command(*inst);
+            }
+            InstructionType::Com3 => {
+                self.dataline.send_command(*inst);
+            }
+            InstructionType::Com4 => {
+                self.dataline.send_command(*inst);
+            }
             InstructionType::Beep => todo!(),
             InstructionType::Click => todo!(),
             InstructionType::Deck1 => todo!(),
@@ -429,6 +438,8 @@ impl Cpu {
                 self.intr_saved = false;
             }
         }
+
+        self.dataline.write(self.read_reg(0));
     }
 }
 
