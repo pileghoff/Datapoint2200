@@ -1,4 +1,4 @@
-use crate::{databus::Dataline, instruction::*};
+use crate::DP2200::{databus::Dataline, instruction::*};
 use std::sync::mpsc::Receiver;
 
 #[derive(Debug)]
@@ -448,7 +448,7 @@ mod tests {
     use std::time;
 
     use super::*;
-    use crate::datapoint::Datapoint;
+    use crate::DP2200::datapoint::Datapoint;
 
     #[test]
     fn test_fetch_add_inst() {

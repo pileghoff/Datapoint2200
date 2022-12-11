@@ -2,3 +2,4 @@
 /debug
 Cargo.lock
 operating_system
+dist/

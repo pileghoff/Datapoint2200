@@ -2,6 +2,7 @@
 name = "datapoint2200"
 version = "0.1.0"
 edition = "2021"
+rust-version = "1.65"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 [[bin]]
@@ -11,4 +12,20 @@ path = "src/main.rs"
 
 [dependencies]
 parse_int = "0.6.0"
-crossterm = "0.25"
+egui = "0.20.0"
+eframe = { version = "0.20.0", default-features = false, features = [
+    "default_fonts", # Embed the default egui fonts.
+    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
+] }
+anyhow = "1.0.66"
+
+
+# native:
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+tracing-subscriber = "0.3"
+
+# web:
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+console_error_panic_hook = "0.1.6"
+tracing-wasm = "0.2"
+wasm-bindgen-futures = "0.4"

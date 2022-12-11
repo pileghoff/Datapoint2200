@@ -1,6 +1,6 @@
 use std::sync::mpsc::channel;
 
-use crate::{
+use crate::DP2200::{
     assembler::assemble,
     clock::Clock,
     cpu::Cpu,
@@ -16,7 +16,7 @@ pub struct Datapoint {
 
 impl Datapoint {
     pub fn new(lines: Vec<&str>, time_scale: f32) -> Datapoint {
-        let program = assemble(lines);
+        let program = assemble(lines).unwrap();
         let cpu_clock = channel::<u8>();
         let cpu_intr = channel::<u8>();
         let databus_clock = channel::<u8>();

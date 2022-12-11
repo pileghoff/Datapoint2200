@@ -4,8 +4,8 @@ use std::{
     thread::{spawn, JoinHandle},
 };
 
-use crate::screen::Screen;
-use crate::{
+use crate::DP2200::screen::Screen;
+use crate::DP2200::{
     instruction::{Instruction, InstructionType},
     screen::SCREEN_ADDR,
 };

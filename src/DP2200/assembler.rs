@@ -1,9 +1,10 @@
 #![allow(dead_code)]
+use anyhow::{anyhow, bail, Context, Result};
 use parse_int::parse;
 use std::vec;
 
-fn get_instruction_byte_size(inst: &str) -> u16 {
-    match inst {
+fn get_instruction_byte_size(inst: &str) -> Result<u16> {
+    Ok(match inst {
         "LoadImm" => 2,
         "Load" => 1,
         "AddImm" => 2,
@@ -61,8 +62,8 @@ fn get_instruction_byte_size(inst: &str) -> u16 {
         "Sb" => 1,
         "Rewind" => 1,
         "Tstop" => 1,
-        _ => panic!("Unknown instruction {}", inst),
-    }
+        _ => bail!(format!("Unknown instruction {}", inst)),
+    })
 }
 
 // Take a string, and removes everything after the first #
@@ -109,20 +110,27 @@ fn get_label_or_address(line: &mut String) -> (Option<String>, Option<u16>) {
 // Take a line of assemble, without label or leading/trailing whitespace and returns the instruction name
 // Example:
 // Add 2, 3 -> Add
-fn get_instruction(line: &str) -> &str {
+fn get_instruction(line: &str) -> Result<&str> {
     if line.contains(':') {
-        panic!("Label was not removed before calling get_instruction")
+        anyhow!(
+            "Label was not removed before calling get_instruction: {}",
+            line
+        );
     }
 
     if line.starts_with(' ') {
-        panic!("Assembly contains leading whitespace when calling get_instructions");
+        anyhow!(
+            "Assembly contains leading whitespace when calling get_instructions: {}",
+            line
+        );
     }
 
     if line.contains(' ') {
-        return &line[..line.find(' ').unwrap()];
+        let res = &line[..line.find(' ').unwrap()];
+        return Ok(res);
     }
 
-    line
+    Ok(line)
 }
 
 // Takes a line of assembly and returns a list of operands
@@ -152,8 +160,8 @@ const REGISTER_NAMES: [(&str, &str); 12] = [
 ];
 
 impl OpParser {
-    fn new(line: &str, label_list: &[(String, u16)]) -> OpParser {
-        let inst = get_instruction(line);
+    fn new(line: &str, label_list: &[(String, u16)]) -> Result<OpParser> {
+        let inst = get_instruction(line)?;
         let mut operands = line.to_owned();
         operands.replace_range(..inst.len(), "");
         let op_list = operands.split(',').map(|x| x.to_owned());
@@ -175,51 +183,55 @@ impl OpParser {
             res.push(op);
         }
 
-        OpParser {
+        Ok(OpParser {
             ops: res,
             counter: 0,
-        }
+        })
     }
 
-    fn op(&mut self) -> u8 {
+    fn op(&mut self) -> Result<u8> {
         self.counter += 1;
         let val = self.ops[self.counter - 1].clone();
         if val.starts_with("'") {
-            return val.as_str().chars().nth(1).unwrap() as u8;
+            return Ok(val
+                .as_str()
+                .chars()
+                .nth(1)
+                .context("Could not parse Asci char")? as u8);
         }
-        parse::<u8>(&val).unwrap()
+        Ok(parse::<u8>(&val)?)
     }
 
-    fn lsp(&self) -> u8 {
-        (parse::<u16>(&self.ops[self.counter]).unwrap() & 0xff) as u8
+    fn lsp(&self) -> Result<u8> {
+        Ok((parse::<u16>(&self.ops[self.counter])? & 0xff) as u8)
     }
 
-    fn msp(&mut self) -> u8 {
+    fn msp(&mut self) -> Result<u8> {
         self.counter += 1;
-        (parse::<u16>(&self.ops[self.counter - 1]).unwrap() >> 8) as u8
+        Ok((parse::<u16>(&self.ops[self.counter - 1])? >> 8) as u8)
     }
 }
 
 #[rustfmt::skip]
-fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Vec<u8> {
-    let inst = get_instruction(line);
-    let mut op = OpParser::new(line, label_list);
+fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Result<Vec<u8>> {
+    let inst = get_instruction(line)?;
+    let mut op = OpParser::new(line, label_list)?;
 
     // Used to set the [t]ype, [d]estination and [s]ource of the opcode
     let tds = |t: u8, d: u8, s: u8| (t & 3) << 6 | (d & 7) << 3 | s & 7;
-    match inst {           
+    Ok(match inst {           
         "Halt"         => vec![0],
-        "Load"         => vec![tds(3, op.op(), op.op())],
-        "Add"          => vec![tds(2, 0, op.op())],
-        "AddCarry"     => vec![tds(2, 1, op.op())],
-        "Sub"          => vec![tds(2, 2, op.op())],
-        "SubBorrow"    => vec![tds(2, 3, op.op())],
-        "And"          => vec![tds(2, 4, op.op())],
-        "Or"           => vec![tds(2, 6, op.op())],
-        "Xor"          => vec![tds(2, 5, op.op())],
-        "Comp"         => vec![tds(2, 7, op.op())],
-        "ReturnIf"     => vec![tds(0, op.op() + 4, 3)],
-        "ReturnIfNot"  => vec![tds(0, op.op(), 3)],
+        "Load"         => vec![tds(3, op.op()?, op.op()?)],
+        "Add"          => vec![tds(2, 0, op.op()?)],
+        "AddCarry"     => vec![tds(2, 1, op.op()?)],
+        "Sub"          => vec![tds(2, 2, op.op()?)],
+        "SubBorrow"    => vec![tds(2, 3, op.op()?)],
+        "And"          => vec![tds(2, 4, op.op()?)],
+        "Or"           => vec![tds(2, 6, op.op()?)],
+        "Xor"          => vec![tds(2, 5, op.op()?)],
+        "Comp"         => vec![tds(2, 7, op.op()?)],
+        "ReturnIf"     => vec![tds(0, op.op()? + 4, 3)],
+        "ReturnIfNot"  => vec![tds(0, op.op()?, 3)],
         "Return"       => vec![tds(0, 0, 7)],
         "ShiftRight"   => vec![tds(0, 1, 2)],
         "ShiftLeft"    => vec![tds(0, 0, 2)],
@@ -233,23 +245,23 @@ fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Vec<u8> {
         "SelectBeta"  => vec![tds(0, 2, 0)],
 
         // Immediate instructions
-        "LoadImm"      => vec![tds(0, op.op(), 6)    , op.op()],
-        "AddImm"       => vec![tds(0, 0, 4)          , op.op()],
-        "AddImmCarry"  => vec![tds(0, 1, 4)          , op.op()],
-        "SubImm"       => vec![tds(0, 2, 4)          , op.op()],
-        "SubImmBorrow" => vec![tds(0, 3, 4)          , op.op()],
-        "AndImm"       => vec![tds(0, 4, 4)          , op.op()],
-        "OrImm"        => vec![tds(0, 6, 4)          , op.op()],
-        "XorImm"       => vec![tds(0, 5, 4)          , op.op()],
-        "CompImm"      => vec![tds(0, 7, 4)          , op.op()],
+        "LoadImm"      => vec![tds(0, op.op()?, 6)    , op.op()?],
+        "AddImm"       => vec![tds(0, 0, 4)          , op.op()?],
+        "AddImmCarry"  => vec![tds(0, 1, 4)          , op.op()?],
+        "SubImm"       => vec![tds(0, 2, 4)          , op.op()?],
+        "SubImmBorrow" => vec![tds(0, 3, 4)          , op.op()?],
+        "AndImm"       => vec![tds(0, 4, 4)          , op.op()?],
+        "OrImm"        => vec![tds(0, 6, 4)          , op.op()?],
+        "XorImm"       => vec![tds(0, 5, 4)          , op.op()?],
+        "CompImm"      => vec![tds(0, 7, 4)          , op.op()?],
 
         // Instructions using 16 bit address as operand
-        "Jump"         => vec![tds(1, 0, 4)          , op.lsp(), op.msp()],
-        "JumpIf"       => vec![tds(1, op.op() + 4, 0), op.lsp(), op.msp()],
-        "JumpIfNot"    => vec![tds(1, op.op(), 0)    , op.lsp(), op.msp()],
-        "Call"         => vec![tds(1, 0, 6)          , op.lsp(), op.msp()],
-        "CallIf"       => vec![tds(1, op.op() + 4, 2), op.lsp(), op.msp()],
-        "CallIfNot"    => vec![tds(1, op.op(), 2)    , op.lsp(), op.msp()],
+        "Jump"         => vec![tds(1, 0, 4)          , op.lsp()?, op.msp()?],
+        "JumpIf"       => vec![tds(1, op.op()? + 4, 0), op.lsp()?, op.msp()?],
+        "JumpIfNot"    => vec![tds(1, op.op()?, 0)    , op.lsp()?, op.msp()?],
+        "Call"         => vec![tds(1, 0, 6)          , op.lsp()?, op.msp()?],
+        "CallIf"       => vec![tds(1, op.op()? + 4, 2), op.lsp()?, op.msp()?],
+        "CallIfNot"    => vec![tds(1, op.op()?, 2)    , op.lsp()?, op.msp()?],
 
         // Ex commands are defined using octal codes form reference manual
         "Adr"          => vec![0o121],
@@ -272,34 +284,36 @@ fn parse_instruction(line: &str, label_list: &[(String, u16)]) -> Vec<u8> {
         "Rewind"       => vec![0o175],
         "Tstop"        => vec![0o177],
         i => panic!("Unknown instruction {}", i),
-    }
+    })
 }
 
-fn parse_data(line: &str) -> Vec<u8> {
+fn parse_data(line: &str) -> Result<Vec<u8>> {
     let line = line.replacen("DATA ", "", 1);
     let tokens = line.split(',');
     let mut res = Vec::new();
     for token in tokens {
         // If a string of ascii
         if token.starts_with('\"') && token.ends_with('\"') {
-            let chars = token.get(1..token.len() - 1).unwrap();
+            let chars = token
+                .get(1..token.len() - 1)
+                .context("Failed to get string")?;
             for c in chars.as_bytes() {
                 res.push(*c);
             }
         } else {
-            res.push(parse::<u8>(token).unwrap());
+            res.push(parse::<u8>(token)?);
         }
     }
 
-    res
+    Ok(res)
 }
 
 // Take an iterator of lines of assembly and generates a list of (label, address) pairs
 // that can be used in a second pass to generate the final bytecode
-fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<(String, u16)> {
+fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Result<Vec<(String, u16)>> {
     let mut current_address: u16 = 0;
     let mut label_list = Vec::new();
-    for line in lines {
+    for (line_number, line) in lines.enumerate() {
         let mut line = String::from(line);
         remove_comment(&mut line);
         strip(&mut line);
@@ -310,7 +324,10 @@ fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<(String, u1
 
         if let Some(address) = address {
             if address <= current_address {
-                panic!("Invalid address {} at {}", address, current_address);
+                anyhow!(format!(
+                    "Invalid address {} (Current address {}) on line {}",
+                    address, current_address, line_number
+                ));
             }
             current_address = address;
         }
@@ -320,14 +337,22 @@ fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Vec<(String, u1
         }
 
         strip(&mut line);
-        if get_instruction(&line) == "DATA" {
-            current_address += parse_data(&line).len() as u16;
+        if get_instruction(&line)? == "DATA" {
+            current_address += parse_data(&line)
+                .context(format!("Failed to parse data at line {}", line_number))?
+                .len() as u16;
         } else {
-            current_address += get_instruction_byte_size(get_instruction(&line));
+            current_address += get_instruction_byte_size(get_instruction(&line).context(
+                format!("Failed to parse instruction at line {}", line_number),
+            )?)
+            .context(format!(
+                "Failed to parse instruction at line {}",
+                line_number
+            ))?;
         }
     }
 
-    label_list
+    Ok(label_list)
 }
 
 // Insert element at index, if index is  larger than len of vec, inserts zeros
@@ -347,12 +372,12 @@ fn insert_and_extend(l: &mut Vec<u8>, element: u8, index: usize) {
     l.insert(index, element);
 }
 
-pub fn assemble(lines: Vec<&str>) -> Vec<u8> {
-    let label_list = parse_label_list(lines.clone().into_iter());
+pub fn assemble(lines: Vec<&str>) -> Result<Vec<u8>> {
+    let label_list = parse_label_list(lines.clone().into_iter())?;
     let mut res = Vec::new();
     let mut current_address: u16 = 0;
-    for line in lines {
-        let mut line = String::from(line);
+    for (line_number, line) in lines.iter().enumerate() {
+        let mut line = String::from(*line);
         remove_comment(&mut line);
         strip(&mut line);
         let (_, address) = get_label_or_address(&mut line);
@@ -365,10 +390,11 @@ pub fn assemble(lines: Vec<&str>) -> Vec<u8> {
         if line.is_empty() {
             continue;
         }
-        let inst = if get_instruction(&line) == "DATA" {
-            parse_data(&line)
+        let inst = if get_instruction(&line)? == "DATA" {
+            parse_data(&line).context(format!("Failed to parse data on line {}", line_number))?
         } else {
             parse_instruction(&line, &label_list)
+                .context(format!("Parsing line {} failed", line_number))?
         };
         for b in inst.into_iter() {
             insert_and_extend(&mut res, b, current_address as usize);
@@ -376,7 +402,7 @@ pub fn assemble(lines: Vec<&str>) -> Vec<u8> {
         }
     }
 
-    res
+    Ok(res)
 }
 
 #[cfg(test)]
@@ -425,7 +451,7 @@ mod tests {
         remove_comment(&mut s);
         strip(&mut s);
         assert_eq!(s.as_str(), "Add 2, 3");
-        assert_eq!(get_instruction(&s), "Add");
+        assert_eq!(get_instruction(&s).unwrap(), "Add");
         assert_eq!(label, None);
         assert_eq!(address, Some(50));
     }
@@ -439,7 +465,7 @@ mod tests {
             "# This line is only a comment",
             "label2: Halt",
         ];
-        let label_list = parse_label_list(program.into_iter());
+        let label_list = parse_label_list(program.into_iter()).unwrap();
         assert_eq!(label_list[0].0, String::from("label1"));
         assert_eq!(label_list[0].1, 51);
 
@@ -451,25 +477,25 @@ mod tests {
     fn test_parse_operands() {
         let l = String::from("Add 2, 3");
         let label_list = Vec::new();
-        let mut op = OpParser::new(&l, &label_list);
-        assert_eq!(op.op(), 2);
-        assert_eq!(op.op(), 3);
+        let mut op = OpParser::new(&l, &label_list).unwrap();
+        assert_eq!(op.op().unwrap(), 2);
+        assert_eq!(op.op().unwrap(), 3);
     }
 
     #[test]
     fn test_parse_operands_with_label() {
         let l = String::from("Add 2, label1");
         let label_list = vec![(String::from("label1"), 3)];
-        let mut op = OpParser::new(&l, &label_list);
-        assert_eq!(op.op(), 2);
-        assert_eq!(op.op(), 3);
+        let mut op = OpParser::new(&l, &label_list).unwrap();
+        assert_eq!(op.op().unwrap(), 2);
+        assert_eq!(op.op().unwrap(), 3);
     }
 
     #[test]
     fn test_parse_load() {
         let l = String::from("Load 2, 3");
         let label_list = Vec::new();
-        let res = parse_instruction(&l, &label_list);
+        let res = parse_instruction(&l, &label_list).unwrap();
         assert_eq!(res[0], 0xd3);
     }
 
@@ -477,7 +503,7 @@ mod tests {
     fn test_parse_load_imm() {
         let l = String::from("LoadImm 2, 3");
         let label_list = Vec::new();
-        let res = parse_instruction(&l, &label_list);
+        let res = parse_instruction(&l, &label_list).unwrap();
         assert_eq!(res[0], 0x16);
         assert_eq!(res[1], 3);
     }
@@ -486,7 +512,7 @@ mod tests {
     fn test_parse_jump() {
         let l = String::from("Jump 0x0f0f");
         let label_list = Vec::new();
-        let res = parse_instruction(&l, &label_list);
+        let res = parse_instruction(&l, &label_list).unwrap();
         assert_eq!(res[0], 0x44);
         assert_eq!(res[1], 0xf);
         assert_eq!(res[2], 0xf);
@@ -495,14 +521,21 @@ mod tests {
     #[test]
     fn test_parse_program() {
         let program = vec!["Add C", "label1: Sub 2", "10: Jump label1"];
-        let res = assemble(program);
+        let res = assemble(program).unwrap();
         assert_eq!(res, vec![0x82, 0x92, 0, 0, 0, 0, 0, 0, 0, 0, 0x44, 1, 0]);
     }
 
     #[test]
     fn test_parse_ascii() {
         let program = vec!["LoadImm A, 'C'"];
-        let res = assemble(program);
+        let res = assemble(program).unwrap();
         assert_eq!(res, vec![0x6, 0x43]);
+    }
+
+    #[test]
+    fn test_error_messages() {
+        let program = vec!["LoadImm A, c"];
+        let res = assemble(program);
+        println!("{:?}", res);
     }
 }

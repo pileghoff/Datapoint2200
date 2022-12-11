@@ -1,73 +1,41 @@
-#![allow(dead_code)]
+#![warn(clippy::all, rust_2018_idioms)]
 
-pub mod assembler;
-pub mod clock;
-pub mod cpu;
-pub mod databus;
-pub mod datapoint;
-pub mod disassembler;
-pub mod instruction;
-pub mod screen;
+mod DP2200;
+mod app;
+use crate::app::TemplateApp;
 
-use assembler::assemble;
-use cpu::Cpu;
-use crossterm::{cursor, ExecutableCommand, Result};
+// When compiling natively:
+#[cfg(not(target_arch = "wasm32"))]
+fn main() {
+    // Log to stdout (if you run with `RUST_LOG=debug`).
+    tracing_subscriber::fmt::init();
 
-use datapoint::Datapoint;
-use instruction::{FLAG_NAME, REG_NAME};
-use std::{env, fs, io};
-
-fn render_disassembler_out(lines: Vec<String>) {
-    io::stdout().execute(cursor::MoveTo(0, 0)).unwrap();
-    println!("--- Disassembly ----");
-    for (i, l) in lines.iter().enumerate() {
-        io::stdout()
-            .execute(cursor::MoveTo(0, 1 + i as u16))
-            .unwrap();
-        println!("{}", l);
-    }
+    let native_options = eframe::NativeOptions::default();
+    eframe::run_native(
+        "eframe template",
+        native_options,
+        Box::new(|cc| Box::new(TemplateApp::new(cc))),
+    );
 }
 
-fn render_cpu_regs(cpu: &Cpu) {
-    io::stdout().execute(cursor::MoveTo(30, 0)).unwrap();
-    println!("--- Alpha regs ----");
-    for (i, r) in cpu.alpha_registers.iter().enumerate() {
-        io::stdout()
-            .execute(cursor::MoveTo(30, (i + 1) as u16))
-            .unwrap();
-        println!("{}: {}", REG_NAME[i], r);
-    }
-}
+// when compiling to web using trunk.
+#[cfg(target_arch = "wasm32")]
+fn main() {
+    // Make sure panics are logged using `console.error`.
+    console_error_panic_hook::set_once();
 
-fn render_cpu_flags(cpu: &Cpu) {
-    io::stdout().execute(cursor::MoveTo(60, 0)).unwrap();
-    println!("--- Alpha flags ----");
-    for (i, r) in cpu.alpha_flipflops.iter().enumerate() {
-        io::stdout()
-            .execute(cursor::MoveTo(60, (i + 1) as u16))
-            .unwrap();
-        println!("{}: {}", FLAG_NAME[i], r);
-    }
-}
+    // Redirect tracing to console.log and friends:
+    tracing_wasm::set_as_global_default();
 
-fn main() -> Result<()> {
-    let args: Vec<String> = env::args().collect();
-    let file_path = if args.len() > 1 {
-        &args[1]
-    } else {
-        "./test_software/banner.asm"
-    };
+    let web_options = eframe::WebOptions::default();
 
-    let contents = fs::read_to_string(file_path).unwrap();
-
-    let mut machine = Datapoint::new(contents.lines().collect(), 1.0);
-    machine.run();
-    let db = machine.databus.take().unwrap();
-    for line in db.screen.buffer {
-        for c in line {
-            print!("{c}");
-        }
-        println!("");
-    }
-    Ok(())
+    wasm_bindgen_futures::spawn_local(async {
+        eframe::start_web(
+            "canvas", // hardcode it
+            web_options,
+            Box::new(|cc| Box::new(TemplateApp::new(cc))),
+        )
+        .await
+        .expect("failed to start eframe");
+    });
 }
