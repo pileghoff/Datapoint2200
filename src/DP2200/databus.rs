@@ -1,7 +1,6 @@
 use std::{
     sync::mpsc::{channel, Receiver, Sender, TryRecvError},
     sync::{Arc, RwLock},
-    thread::{spawn, JoinHandle},
 };
 
 use crate::DP2200::screen::Screen;
@@ -74,73 +73,63 @@ pub struct Databus {
 }
 
 impl Databus {
-    pub fn run(mut self) -> JoinHandle<Databus> {
-        spawn(move || {
-            loop {
-                match self.clock.try_recv() {
-                    Ok(_) => {
-                        // 153.6kHz Clock
+    pub fn run(&mut self) {
+        match self.clock.try_recv() {
+            Ok(_) => {}
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {}
+        };
+
+        match self.dataline.get_command() {
+            Ok(inst) => match inst.instruction_type {
+                InstructionType::Adr => {
+                    println!("Set addr");
+                    self.selected_addr = self.dataline.read();
+                    self.selected_mode = DatabusMode::Status;
+                }
+                InstructionType::Status => {
+                    self.selected_mode = DatabusMode::Status;
+                }
+                InstructionType::Data => {
+                    self.selected_mode = DatabusMode::Data;
+                }
+                InstructionType::Write => {
+                    if self.selected_addr == SCREEN_ADDR {
+                        self.screen.write(self.dataline.read());
                     }
-                    Err(TryRecvError::Empty) => {}
-                    Err(TryRecvError::Disconnected) => break,
-                };
-
-                match self.dataline.get_command() {
-                    Ok(inst) => match inst.instruction_type {
-                        InstructionType::Adr => {
-                            println!("Set addr");
-                            self.selected_addr = self.dataline.read();
-                            self.selected_mode = DatabusMode::Status;
-                        }
-                        InstructionType::Status => {
-                            self.selected_mode = DatabusMode::Status;
-                        }
-                        InstructionType::Data => {
-                            self.selected_mode = DatabusMode::Data;
-                        }
-                        InstructionType::Write => {
-                            if self.selected_addr == SCREEN_ADDR {
-                                self.screen.write(self.dataline.read());
-                            }
-                        }
-                        InstructionType::Com1 => {
-                            if self.selected_addr == SCREEN_ADDR {
-                                self.screen.control_word(self.dataline.read());
-                            }
-                        }
-                        InstructionType::Com2 => {
-                            if self.selected_addr == SCREEN_ADDR {
-                                self.screen.set_horizontal(self.dataline.read());
-                            }
-                        }
-                        InstructionType::Com3 => {
-                            if self.selected_addr == SCREEN_ADDR {
-                                self.screen.set_vertical(self.dataline.read());
-                            }
-                        }
-                        InstructionType::Com4 => todo!(),
-                        InstructionType::Beep => todo!(),
-                        InstructionType::Click => todo!(),
-                        InstructionType::Deck1 => todo!(),
-                        InstructionType::Deck2 => todo!(),
-                        InstructionType::Rbk => todo!(),
-                        InstructionType::Wbk => todo!(),
-                        InstructionType::Bsp => todo!(),
-                        InstructionType::Sf => todo!(),
-                        InstructionType::Sb => todo!(),
-                        InstructionType::Rewind => todo!(),
-                        InstructionType::Tstop => todo!(),
-                        InstructionType::Halt => {
-                            break;
-                        }
-                        _ => {}
-                    },
-                    Err(TryRecvError::Empty) => {}
-                    Err(TryRecvError::Disconnected) => break,
-                };
-            }
-
-            self
-        })
+                }
+                InstructionType::Com1 => {
+                    if self.selected_addr == SCREEN_ADDR {
+                        self.screen.control_word(self.dataline.read());
+                    }
+                }
+                InstructionType::Com2 => {
+                    if self.selected_addr == SCREEN_ADDR {
+                        self.screen.set_horizontal(self.dataline.read());
+                    }
+                }
+                InstructionType::Com3 => {
+                    if self.selected_addr == SCREEN_ADDR {
+                        self.screen.set_vertical(self.dataline.read());
+                    }
+                }
+                InstructionType::Com4 => todo!(),
+                InstructionType::Beep => todo!(),
+                InstructionType::Click => todo!(),
+                InstructionType::Deck1 => todo!(),
+                InstructionType::Deck2 => todo!(),
+                InstructionType::Rbk => todo!(),
+                InstructionType::Wbk => todo!(),
+                InstructionType::Bsp => todo!(),
+                InstructionType::Sf => todo!(),
+                InstructionType::Sb => todo!(),
+                InstructionType::Rewind => todo!(),
+                InstructionType::Tstop => todo!(),
+                InstructionType::Halt => {}
+                _ => {}
+            },
+            Err(TryRecvError::Empty) => {}
+            Err(TryRecvError::Disconnected) => {}
+        };
     }
 }

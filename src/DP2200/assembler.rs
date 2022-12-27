@@ -70,9 +70,8 @@ fn get_instruction_byte_size(inst: &str) -> Result<u16> {
 // Example:
 // Label1: Add 2, 3 # This is a comment -> Label1: Add 2, 3
 fn remove_comment(line: &mut String) {
-    match line.find('#') {
-        Some(index) => line.replace_range(index.., ""),
-        None => (),
+    if let Some(index) = line.find('#') {
+        line.replace_range(index.., "");
     }
 }
 
@@ -112,17 +111,17 @@ fn get_label_or_address(line: &mut String) -> (Option<String>, Option<u16>) {
 // Add 2, 3 -> Add
 fn get_instruction(line: &str) -> Result<&str> {
     if line.contains(':') {
-        anyhow!(
+        return Err(anyhow!(
             "Label was not removed before calling get_instruction: {}",
             line
-        );
+        ));
     }
 
     if line.starts_with(' ') {
-        anyhow!(
+        return Err(anyhow!(
             "Assembly contains leading whitespace when calling get_instructions: {}",
             line
-        );
+        ));
     }
 
     if line.contains(' ') {
@@ -192,7 +191,7 @@ impl OpParser {
     fn op(&mut self) -> Result<u8> {
         self.counter += 1;
         let val = self.ops[self.counter - 1].clone();
-        if val.starts_with("'") {
+        if val.starts_with('\'') {
             return Ok(val
                 .as_str()
                 .chars()
@@ -324,10 +323,12 @@ fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Result<Vec<(Str
 
         if let Some(address) = address {
             if address <= current_address {
-                anyhow!(format!(
+                return Err(anyhow!(format!(
                     "Invalid address {} (Current address {}) on line {}",
-                    address, current_address, line_number
-                ));
+                    address,
+                    current_address,
+                    line_number + 1
+                )));
             }
             current_address = address;
         }
@@ -339,15 +340,15 @@ fn parse_label_list<'a>(lines: impl Iterator<Item = &'a str>) -> Result<Vec<(Str
         strip(&mut line);
         if get_instruction(&line)? == "DATA" {
             current_address += parse_data(&line)
-                .context(format!("Failed to parse data at line {}", line_number))?
+                .context(format!("Failed to parse data at line {}", line_number + 1))?
                 .len() as u16;
         } else {
             current_address += get_instruction_byte_size(get_instruction(&line).context(
-                format!("Failed to parse instruction at line {}", line_number),
+                format!("Failed to parse instruction at line {}", line_number + 1),
             )?)
             .context(format!(
                 "Failed to parse instruction at line {}",
-                line_number
+                line_number + 1
             ))?;
         }
     }
@@ -391,10 +392,11 @@ pub fn assemble(lines: Vec<&str>) -> Result<Vec<u8>> {
             continue;
         }
         let inst = if get_instruction(&line)? == "DATA" {
-            parse_data(&line).context(format!("Failed to parse data on line {}", line_number))?
+            parse_data(&line)
+                .context(format!("Failed to parse data on line {}", line_number + 1))?
         } else {
             parse_instruction(&line, &label_list)
-                .context(format!("Parsing line {} failed", line_number))?
+                .context(format!("Parsing line {} failed", line_number + 1))?
         };
         for b in inst.into_iter() {
             insert_and_extend(&mut res, b, current_address as usize);

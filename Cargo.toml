@@ -4,28 +4,39 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.65"
 
-# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
-[[bin]]
-name = "main"
-path = "src/main.rs" 
-
+[lib]
+crate-type = ["cdylib"]
 
 [dependencies]
 parse_int = "0.6.0"
-egui = "0.20.0"
-eframe = { version = "0.20.0", default-features = false, features = [
-    "default_fonts", # Embed the default egui fonts.
-    "glow",          # Use the glow rendering backend. Alternative: "wgpu".
-] }
 anyhow = "1.0.66"
+wasm-bindgen = "0.2.83"
+console_error_panic_hook = "0.1.7"
+log = "0.4.17"
+test-log = "0.2.11"
+console_log = "0.2.0"
+env_logger = "*"
 
+[dependencies.web-sys]
+version = "0.3.4"
+features = [
+  'Document',
+  'Element',
+  'HtmlElement',
+  'Node',
+  'Window',
+  'console',
+  "Performance",
+  "Event",
+  "HtmlButtonElement",
+  "HtmlCanvasElement",
+  "CanvasRenderingContext2d",
+  "HtmlTableElement",
+  "HtmlTableRowElement",
+  "HtmlTableCellElement",
+  "ScrollIntoViewOptions",
+  "ScrollBehavior",
+  "ScrollLogicalPosition",
+  "HtmlCollection"
+]
 
-# native:
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-tracing-subscriber = "0.3"
-
-# web:
-[target.'cfg(target_arch = "wasm32")'.dependencies]
-console_error_panic_hook = "0.1.6"
-tracing-wasm = "0.2"
-wasm-bindgen-futures = "0.4"

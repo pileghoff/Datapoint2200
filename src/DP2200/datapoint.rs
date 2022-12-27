@@ -1,3 +1,6 @@
+use log::{info, trace, warn};
+
+use crate::time::Instant;
 use std::sync::mpsc::channel;
 
 use crate::DP2200::{
@@ -8,20 +11,28 @@ use crate::DP2200::{
     screen::Screen,
 };
 
+#[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
+pub enum DataPointRunStatus {
+    Ok,
+    BreakpointHit,
+    Halted,
+}
+
+#[derive(Debug)]
 pub struct Datapoint {
     pub cpu: Cpu,
-    pub clock: Option<Clock>,
-    pub databus: Option<Databus>,
+    pub clock: Clock,
+    pub databus: Databus,
+    pub breakpoints: Vec<u16>,
 }
 
 impl Datapoint {
-    pub fn new(lines: Vec<&str>, time_scale: f32) -> Datapoint {
-        let program = assemble(lines).unwrap();
-        let cpu_clock = channel::<u8>();
+    pub fn build(program: &[u8], time_scale: f32) -> Datapoint {
         let cpu_intr = channel::<u8>();
         let databus_clock = channel::<u8>();
         let dataline = Dataline::generate_pair();
         let mut res = Datapoint {
+            breakpoints: Vec::new(),
             cpu: Cpu {
                 halted: false,
                 intr_enabled: false,
@@ -34,24 +45,24 @@ impl Datapoint {
                 beta_flipflops: [false, false, false, false],
                 program_counter: 0,
                 stack: Vec::new(),
-                clock: cpu_clock.1,
                 intr: cpu_intr.1,
                 dataline: dataline.0,
+                instruction_register: None,
             },
-            clock: Some(Clock {
+            clock: Clock {
                 time_scale,
-                current_time: 0,
-                cpu_clock: cpu_clock.0,
+                emulated_time_ns: 0,
                 cpu_intr: cpu_intr.0,
                 databus_clock: databus_clock.0,
-            }),
-            databus: Some(Databus {
+                last_time: Instant::now(),
+            },
+            databus: Databus {
                 selected_addr: 0,
                 selected_mode: DatabusMode::Status,
                 clock: databus_clock.1,
                 dataline: dataline.1,
                 screen: Screen::new(),
-            }),
+            },
         };
 
         for (i, b) in program.iter().enumerate() {
@@ -61,18 +72,88 @@ impl Datapoint {
         res
     }
 
-    pub fn run(&mut self) -> usize {
-        let mut counter = 0;
-        let clock_handle = self.clock.take().unwrap().run();
-        let databus_handle = self.databus.take().unwrap().run();
-        while !self.cpu.halted {
-            counter += 1;
-            self.cpu.execute_instruction();
+    pub fn new(lines: Vec<&str>, time_scale: f32) -> Datapoint {
+        let program = assemble(lines).unwrap();
+        Datapoint::build(&program, time_scale)
+    }
+
+    pub fn load_program(&mut self, program: &[u8]) {
+        for i in 0..self.cpu.memory.len() {
+            if let Some(byte) = program.get(i) {
+                self.cpu.memory[i] = *byte;
+            } else {
+                self.cpu.memory[i] = 0;
+            }
         }
 
-        self.databus = Some(databus_handle.join().unwrap());
+        self.breakpoints = Vec::new();
+    }
 
-        counter
+    pub fn update(&mut self, delta_time_ms: f64) -> DataPointRunStatus {
+        if self.cpu.halted {
+            trace!("Total execution time: {}", self.clock.emulated_time_ns);
+            return DataPointRunStatus::Halted;
+        }
+
+        let goal_time = self.clock.emulated_time_ns + (delta_time_ms * 1_000_000.0) as u128;
+
+        loop {
+            if self.cpu.instruction_register.is_none() {
+                self.cpu.instruction_register = Some(self.cpu.fetch_instruction());
+
+                if self.breakpoints.contains(&self.cpu.program_counter) {
+                    return DataPointRunStatus::BreakpointHit;
+                }
+            }
+
+            self.clock
+                .ticks(self.cpu.instruction_register.unwrap().get_clock_cycles() as u128);
+
+            if !self.cpu.execute_instruction() {
+                break;
+            }
+
+            self.databus.run();
+
+            if self.clock.emulated_time_ns >= goal_time {
+                break;
+            }
+        }
+
+        DataPointRunStatus::Ok
+    }
+
+    pub fn single_step(&mut self) -> DataPointRunStatus {
+        loop {
+            self.clock.single_clock();
+            if self.cpu.execute_instruction() {
+                break;
+            }
+        }
+
+        self.databus.run();
+
+        if self.cpu.halted {
+            return DataPointRunStatus::Halted;
+        }
+
+        DataPointRunStatus::Ok
+    }
+
+    pub fn run(&mut self) -> u128 {
+        while !self.cpu.halted {
+            self.update(10.0);
+        }
+
+        return self.clock.emulated_time_ns;
+    }
+
+    pub fn toggle_breakpoint(&mut self, addr: u16) {
+        if let Some(index) = self.breakpoints.iter().position(|&x| addr == x) {
+            self.breakpoints.remove(index);
+        } else {
+            self.breakpoints.push(addr);
+        }
     }
 }
 
@@ -86,7 +167,7 @@ mod tests {
 
         let mut machine = Datapoint::new(program, 1.0);
         machine.run();
-        let db = machine.databus.take().unwrap();
+        let db = machine.databus;
         assert_eq!(db.selected_addr, 0x69);
         assert_eq!(db.selected_mode, DatabusMode::Status);
     }
@@ -97,7 +178,7 @@ mod tests {
 
         let mut machine = Datapoint::new(program, 1.0);
         machine.run();
-        let db = machine.databus.take().unwrap();
+        let db = machine.databus;
         assert_eq!(db.selected_addr, 0xf0);
         assert_eq!(db.screen.buffer[0][0], 'Z');
     }

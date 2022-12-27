@@ -1,5 +1,7 @@
-/target
-/debug
+*target
+*debug
 Cargo.lock
 operating_system
 dist/
+cassette_dump_converter/
+test_software/

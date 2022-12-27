@@ -1,120 +1,118 @@
 <!DOCTYPE html>
 <html>
-<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
-
-<!-- Disable zooming: -->
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
-
-<head>
-    <!-- change this to your project name -->
-    <title>Datapoint 2200</title>
-
-    <!-- config for our rust wasm binary. go to https://trunkrs.dev/assets/#rust for more customization -->
-    <link data-trunk rel="rust" data-wasm-opt="2" />
-    <!-- this is the base url relative to which other urls will be constructed. trunk will insert this from the public-url option -->
-    <base data-trunk-public-url />
-
-    <link data-trunk rel="copy-file" href="assets/manifest.json" />
-
-    <link rel="manifest" href="manifest.json">
-
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="white">
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#404040">
-
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      rel="stylesheet"
+      href="https://cdn.jsdelivr.net/npm/water.css@2/out/water.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css?family=Share%20Tech%20Mono"
+    />
     <style>
-        html {
-            /* Remove touch delay: */
-            touch-action: manipulation;
-        }
+      #disassembler {
+        grid-column: 3;
+        grid-row: 2;
+      }
 
-        body {
-            /* Light mode background color for what is not covered by the egui canvas,
-            or where the egui canvas is translucent. */
-            background: #909090;
-        }
+      #cpu_status {
+        grid-column: 2;
+        grid-row: 2;
+      }
 
-        @media (prefers-color-scheme: dark) {
-            body {
-                /* Dark mode background color for what is not covered by the egui canvas,
-                or where the egui canvas is translucent. */
-                background: #404040;
-            }
-        }
+      #screen {
+        grid-column-start: 1;
+        grid-column-end: 6;
+        grid-row: 1;
+        justify-self: center;
+      }
 
-        /* Allow canvas to fill entire web page: */
-        html,
-        body {
-            overflow: hidden;
-            margin: 0 !important;
-            padding: 0 !important;
-            height: 100%;
-            width: 100%;
-        }
+      #control {
+        display: inline-block;
+      }
 
-        /* Position canvas in center-top: */
-        canvas {
-            margin-right: auto;
-            margin-left: auto;
-            display: block;
-            position: absolute;
-            top: 0%;
-            left: 50%;
-            transform: translate(-50%, 0%);
-        }
+      #main > div {
+        height: 100%;
+        overflow: scroll;
+      }
 
-        .centered {
-            margin-right: auto;
-            margin-left: auto;
-            display: block;
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            color: #f0f0f0;
-            font-size: 24px;
-            font-family: Ubuntu-Light, Helvetica, sans-serif;
-            text-align: center;
-        }
+      table {
+        table-layout: auto;
+        overflow: scroll;
+      }
 
-        /* ---------------------------------------------- */
-        /* Loading animation from https://loading.io/css/ */
-        .lds-dual-ring {
-            display: inline-block;
-            width: 24px;
-            height: 24px;
-        }
+      html {
+        height: 100%;
+        padding: 20px;
+        box-sizing: border-box;
+      }
 
-        .lds-dual-ring:after {
-            content: " ";
-            display: block;
-            width: 24px;
-            height: 24px;
-            margin: 0px;
-            border-radius: 50%;
-            border: 3px solid #fff;
-            border-color: #fff transparent #fff transparent;
-            animation: lds-dual-ring 1.2s linear infinite;
-        }
+      body,
+      #main {
+        max-width: unset;
+        width: 100%;
+        height: 100%;
+        margin: 0;
+      }
 
-        @keyframes lds-dual-ring {
-            0% {
-                transform: rotate(0deg);
-            }
-
-            100% {
-                transform: rotate(360deg);
-            }
-        }
-
+      #main {
+        display: grid;
+        grid-template-columns: repeat(5, 1fr);
+        grid-template-rows: auto, 1fr;
+        grid-column-gap: 40px;
+        grid-row-gap: 10px;
+      }
     </style>
-</head>
+  </head>
+  <body>
+    <div id="main">
+      <div id="screen">
+        <canvas width="966px" height="250px" id="screen_canvas"></canvas>
+      </div>
+      <div id="cpu_status">
+        <div id="controls">
+          <button id="single_step">Single step</button>
+          <button id="run">Run</button>
+          <button id="pause">Pause</button>
+        </div>
 
-<body>
-    <!-- The WASM code will resize the canvas dynamically -->
-    <!-- the id is hardcoded in main.rs . so, make sure both match. -->
-    <canvas id="canvas"></canvas>
-</body>
-
+        <div id="registers">
+          <table>
+            <thead>
+              <th colspan="2">Registers</th>
+            </thead>
+            <tbody id="register_table"></tbody>
+          </table>
+        </div>
+        <div id="flags">
+          <table>
+            <thead>
+              <th colspan="2">Flags</th>
+            </thead>
+            <tbody id="flag_table"></tbody>
+          </table>
+        </div>
+        <div id="stack">
+          <table>
+            <thead>
+              <th colspan="2">Stack</th>
+            </thead>
+            <tbody id="stack_table"></tbody>
+          </table>
+        </div>
+      </div>
+      <div id="disassembler">
+        <div>
+          <table>
+            <thead>
+              <th colspan="4">Memory</th>
+            </thead>
+            <tbody id="mem_table"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </body>
 </html>
-
-<!-- Powered by egui: https://github.com/emilk/egui/ -->

@@ -24,6 +24,19 @@ impl Screen {
             cursor_enabled: false,
         }
     }
+
+    pub fn get_screen(&self) -> String {
+        let mut s = String::new();
+
+        for l in 0..12 {
+            for c in 0..80 {
+                s.push(self.buffer[l][c]);
+            }
+            s.push('\n');
+        }
+        s
+    }
+
     pub fn write(&mut self, data: u8) {
         self.buffer[self.cursor.line][self.cursor.character] = data as char;
     }

@@ -4,12 +4,18 @@ use crate::DP2200::{
     cpu::*,
     instruction::{Instruction, InstructionType, FLAG_NAME, REG_NAME},
 };
+
+use super::datapoint::Datapoint;
 #[derive(Debug, Clone)]
 pub struct Disassembler {
-    addr_to_line: Vec<(u16, String)>,
+    pub addr_to_line: Vec<(u16, String)>,
 }
 
 impl Disassembler {
+    pub fn from_vec(memory: &[u8]) -> Disassembler {
+        let datapoint = Datapoint::build(memory, 1.0);
+        Disassembler::new(datapoint.cpu)
+    }
     pub fn new(mut cpu: Cpu) -> Disassembler {
         let mut disassembler = Disassembler {
             addr_to_line: Vec::new(),
@@ -26,15 +32,18 @@ impl Disassembler {
             inst = cpu.fetch_instruction();
             let d = REG_NAME[inst.get_destination() as usize];
             let s = REG_NAME[inst.get_source() as usize];
-            let c = FLAG_NAME[inst.get_destination() as usize];
+
+            let c = inst.get_destination();
+            let c = if c >= 4 { c - 4 } else { c };
+            let c = FLAG_NAME[c as usize];
             let op = inst.operand;
             let addr = inst.address;
             let line = match inst.instruction_type {
-                InstructionType::Unknown => "Unknown".to_string(),
+                InstructionType::Unknown => format!("{:#02x}", inst.opcode),
                 InstructionType::LoadImm => {
                     format!("LoadImm {}, {}", d, op.unwrap())
                 }
-                InstructionType::Load => format!("Load {}", s),
+                InstructionType::Load => format!("Load {}, {}", d, s),
                 InstructionType::AddImm => format!("AddImm {}", op.unwrap()),
                 InstructionType::Add => format!("Add {}", s),
                 InstructionType::AddImmCarry => {
@@ -54,7 +63,7 @@ impl Disassembler {
                 InstructionType::XorImm => format!("XorImm {}", op.unwrap()),
                 InstructionType::Xor => format!("Xor {}", d),
                 InstructionType::CompImm => format!("CompImm {}", op.unwrap()),
-                InstructionType::Comp => format!("Comp {}", d),
+                InstructionType::Comp => format!("Comp {}", s),
                 InstructionType::Jump => format!("Jump {}", addr.unwrap()),
                 InstructionType::JumpIf => {
                     format!("JumpIf {}, {}", c, addr.unwrap())
@@ -83,25 +92,25 @@ impl Disassembler {
                 InstructionType::DisableInts => "DisableIntr".to_string(),
                 InstructionType::SelectAlpha => "SelecctAlpha".to_string(),
                 InstructionType::SelectBeta => "SelectBeta".to_string(),
-                InstructionType::Adr => todo!(),
-                InstructionType::Status => todo!(),
-                InstructionType::Data => todo!(),
-                InstructionType::Write => todo!(),
-                InstructionType::Com1 => todo!(),
-                InstructionType::Com2 => todo!(),
-                InstructionType::Com3 => todo!(),
-                InstructionType::Com4 => todo!(),
-                InstructionType::Beep => todo!(),
-                InstructionType::Click => todo!(),
-                InstructionType::Deck1 => todo!(),
-                InstructionType::Deck2 => todo!(),
-                InstructionType::Rbk => todo!(),
-                InstructionType::Wbk => todo!(),
-                InstructionType::Bsp => todo!(),
-                InstructionType::Sf => todo!(),
-                InstructionType::Sb => todo!(),
-                InstructionType::Rewind => todo!(),
-                InstructionType::Tstop => todo!(),
+                InstructionType::Adr => "Adr".to_string(),
+                InstructionType::Status => "Status".to_string(),
+                InstructionType::Data => "Data".to_string(),
+                InstructionType::Write => "Write".to_string(),
+                InstructionType::Com1 => "Com1".to_string(),
+                InstructionType::Com2 => "Com2".to_string(),
+                InstructionType::Com3 => "Com3".to_string(),
+                InstructionType::Com4 => "Com4".to_string(),
+                InstructionType::Beep => "Beep".to_string(),
+                InstructionType::Click => "Click".to_string(),
+                InstructionType::Deck1 => "Deck1".to_string(),
+                InstructionType::Deck2 => "Deck2".to_string(),
+                InstructionType::Rbk => "Rbk".to_string(),
+                InstructionType::Wbk => "Wbk".to_string(),
+                InstructionType::Bsp => "Bsp".to_string(),
+                InstructionType::Sf => "Sf".to_string(),
+                InstructionType::Sb => "Sb".to_string(),
+                InstructionType::Rewind => "Rewing".to_string(),
+                InstructionType::Tstop => "Tstop".to_string(),
             };
 
             disassembler.addr_to_line.push((program_counter, line));

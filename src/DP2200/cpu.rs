@@ -1,4 +1,5 @@
 use crate::DP2200::{databus::Dataline, instruction::*};
+use log::{info, trace, warn};
 use std::sync::mpsc::Receiver;
 
 #[derive(Debug)]
@@ -13,8 +14,8 @@ pub struct Cpu {
     pub beta_registers: [u8; 7],
     pub beta_flipflops: [bool; 4],
     pub program_counter: u16,
+    pub instruction_register: Option<Instruction>,
     pub stack: Vec<u16>,
-    pub clock: Receiver<u8>,
     pub intr: Receiver<u8>,
     pub dataline: Dataline,
 }
@@ -165,7 +166,7 @@ impl Cpu {
                 0o173 => (InstructionType::Sb, None, None),
                 0o175 => (InstructionType::Rewind, None, None),
                 0o177 => (InstructionType::Tstop, None, None),
-                _ => panic!("Unknown inst"),
+                _ => (InstructionType::Unknown, None, None),
             },
         };
         inst.address = address;
@@ -175,12 +176,21 @@ impl Cpu {
         inst
     }
 
-    pub fn execute_instruction(&mut self) {
-        let inst = &self.fetch_instruction();
+    pub fn execute_instruction(&mut self) -> bool {
+        if self.halted {
+            return false;
+        }
+
+        if self.instruction_register.is_none() {
+            self.instruction_register = Some(self.fetch_instruction())
+        }
+
+        let inst = &self.instruction_register.unwrap();
         let hl = self.get_hl_address();
         let s = inst.get_source();
         let d = inst.get_destination();
         let c = if d >= 4 { d - 4 } else { d };
+        trace!("Execute inst: {:?}", inst.instruction_type);
         match inst.instruction_type {
             InstructionType::LoadImm => {
                 self.write_reg(d, inst.operand.unwrap());
@@ -189,7 +199,11 @@ impl Cpu {
                 if d == 7 && s == 7 {
                     self.halted = true;
                 } else if d == 7 {
-                    self.memory[hl as usize] = self.read_reg(s);
+                    if hl as usize > self.memory.len() {
+                        info!("{:?}:{}:{}", inst, self.program_counter, hl);
+                    } else {
+                        self.memory[hl as usize] = self.read_reg(s);
+                    }
                 } else if s == 7 {
                     self.write_reg(d, self.memory[hl as usize]);
                 } else {
@@ -275,7 +289,7 @@ impl Cpu {
                 self.update_flags();
             }
             InstructionType::Or => {
-                self.write_reg(0, self.read_reg(0) | inst.operand.unwrap());
+                self.write_reg(0, self.read_reg(0) | self.read_reg(s));
 
                 self.write_flag(0, false);
                 self.update_flags();
@@ -287,20 +301,26 @@ impl Cpu {
                 self.update_flags();
             }
             InstructionType::Xor => {
-                self.write_reg(0, self.read_reg(0) ^ inst.operand.unwrap());
+                self.write_reg(0, self.read_reg(0) ^ self.read_reg(s));
 
                 self.write_flag(0, false);
                 self.update_flags();
             }
             InstructionType::CompImm => {
+                let saved_reg = self.read_reg(0);
                 let res: i16 = (self.read_reg(0) as i16) - (inst.operand.unwrap() as i16);
                 self.write_flag(0, res < 0);
+                self.write_reg(0, res as u8);
                 self.update_flags();
+                self.write_reg(0, saved_reg);
             }
             InstructionType::Comp => {
+                let saved_reg = self.read_reg(0);
                 let res: i16 = (self.read_reg(0) as i16) - (self.read_reg(s) as i16);
                 self.write_flag(0, res < 0);
+                self.write_reg(0, res as u8);
                 self.update_flags();
+                self.write_reg(0, saved_reg);
             }
             InstructionType::Jump => {
                 self.program_counter = 0x1fff & inst.address.unwrap();
@@ -407,22 +427,18 @@ impl Cpu {
             InstructionType::Com4 => {
                 self.dataline.send_command(*inst);
             }
-            InstructionType::Beep => todo!(),
-            InstructionType::Click => todo!(),
-            InstructionType::Deck1 => todo!(),
-            InstructionType::Deck2 => todo!(),
-            InstructionType::Rbk => todo!(),
-            InstructionType::Wbk => todo!(),
-            InstructionType::Bsp => todo!(),
-            InstructionType::Sf => todo!(),
-            InstructionType::Sb => todo!(),
-            InstructionType::Rewind => todo!(),
-            InstructionType::Tstop => todo!(),
+            InstructionType::Beep => {}
+            InstructionType::Click => {}
+            InstructionType::Deck1 => {}
+            InstructionType::Deck2 => {}
+            InstructionType::Rbk => {}
+            InstructionType::Wbk => {}
+            InstructionType::Bsp => {}
+            InstructionType::Sf => {}
+            InstructionType::Sb => {}
+            InstructionType::Rewind => {}
+            InstructionType::Tstop => {}
         };
-
-        for _i in 0..inst.get_clock_cycles() {
-            self.clock.recv().unwrap();
-        }
 
         let intr_happened = self.intr.try_recv();
         if intr_happened.is_ok() {
@@ -440,12 +456,15 @@ impl Cpu {
         }
 
         self.dataline.write(self.read_reg(0));
+        self.instruction_register = None;
+
+        !self.halted
     }
 }
 
 #[cfg(test)]
 mod tests {
-    use std::time;
+    use test_log::test;
 
     use super::*;
     use crate::DP2200::datapoint::Datapoint;
@@ -544,21 +563,6 @@ mod tests {
     }
 
     #[test]
-    fn test_jump_if_not() {
-        let program = vec![
-            //                                     Number of times instruction is run
-            "LoadImm A, 10",     // 10                       =  1
-            "loop: SubImm 1",    // 9, 8,7,6,5,4,3,2,1,0,-1  = 11
-            "JumpIfNot 0, loop", //9,8,7,6,5,4,3,2,1,0,-1    = 11
-            "Halt",              // -1                       =  1
-        ]; //                                                 24 total
-
-        let mut machine = Datapoint::new(program, 1.0);
-        let insts_cnt = machine.run();
-        assert_eq!(insts_cnt, 24);
-    }
-
-    #[test]
     fn test_call() {
         let program = vec![
             "Nop",        //addr 0
@@ -571,7 +575,6 @@ mod tests {
         machine.run();
 
         assert_eq!(machine.cpu.pop_stack(), 4);
-        assert_eq!(machine.cpu.program_counter, 6);
     }
 
     #[test]
@@ -582,7 +585,6 @@ mod tests {
         machine.run();
 
         assert_eq!(machine.cpu.read_reg(1), 10);
-        assert_eq!(machine.cpu.program_counter, 4);
     }
 
     #[test]
@@ -624,26 +626,6 @@ mod tests {
     }
 
     #[test]
-    fn test_clock() {
-        let program = vec![
-            "SelectBeta",    // 2
-            "LoadImm A, 10", // 2
-            "SelectAlpha",   // 2
-            "LoadImm A, 20", // 2
-            "SelectBeta",    // 2
-            "Halt",          // 0
-        ];
-        let mut machine = Datapoint::new(program, 1000.0);
-        let start = time::Instant::now();
-        machine.run();
-        let elapsed = start.elapsed();
-        // 10 cycles, at 1000 times slowdown should take = 16000 us
-        print!("{}", elapsed.as_micros());
-        assert!(elapsed.as_micros() > 16000);
-        assert!(elapsed.as_micros() < 18000);
-    }
-
-    #[test]
     fn test_intr() {
         let program = vec![
             "CompImm 1",      // Carry flag gets set if A is 0 (First time)
@@ -659,5 +641,15 @@ mod tests {
 
         let counter = machine.run();
         println!("{}", counter);
+    }
+
+    #[test]
+    fn test_comp_zero() {
+        let program = vec!["LoadImm A, 10", "LoadImm B, 10", "Comp B", "Halt"];
+
+        let mut machine = Datapoint::new(program, 1000.0);
+        machine.run();
+        assert!(!machine.cpu.read_flag(0));
+        assert!(machine.cpu.read_flag(1));
     }
 }
