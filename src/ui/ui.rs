@@ -8,6 +8,7 @@ use log::{info, trace, warn};
 use wasm_bindgen::{closure::WasmClosure, prelude::*, JsCast};
 use web_sys::{
     window, Document, Element, Event, HtmlButtonElement, HtmlTableCellElement, HtmlTableRowElement,
+    KeyboardEvent,
 };
 
 #[derive(Debug)]
@@ -35,7 +36,43 @@ impl State {
         state.init_mem_table();
         state.init_pause_button();
         state.init_emulation_closure();
+
+        state.init_keyboard_events();
         state
+    }
+
+    fn init_keyboard_events(&self) {
+        let ui_state = self.ui_state.clone();
+        let keydown_handler: Closure<dyn Fn(_)> = Closure::new(move |event: KeyboardEvent| {
+            ui_state
+                .borrow_mut()
+                .datapoint
+                .databus
+                .keyboard
+                .keydown(event.key())
+        });
+
+        let ui_state = self.ui_state.clone();
+        let keyup_handler: Closure<dyn Fn(_)> = Closure::new(move |event: KeyboardEvent| {
+            ui_state
+                .borrow_mut()
+                .datapoint
+                .databus
+                .keyboard
+                .keyup(event.key())
+        });
+        self.ui_state
+            .borrow()
+            .document
+            .add_event_listener_with_callback("keydown", keydown_handler.as_ref().unchecked_ref());
+
+        self.ui_state
+            .borrow()
+            .document
+            .add_event_listener_with_callback("keyup", keyup_handler.as_ref().unchecked_ref());
+
+        keydown_handler.forget();
+        keyup_handler.forget();
     }
 
     fn init_emulation_closure(&self) {

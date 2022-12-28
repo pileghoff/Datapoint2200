@@ -11,6 +11,8 @@ use crate::DP2200::{
     screen::Screen,
 };
 
+use super::keyboard::Keyboard;
+
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
 pub enum DataPointRunStatus {
     Ok,
@@ -62,6 +64,7 @@ impl Datapoint {
                 clock: databus_clock.1,
                 dataline: dataline.1,
                 screen: Screen::new(),
+                keyboard: Keyboard::new(),
             },
         };
 

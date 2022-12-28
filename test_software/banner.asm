@@ -1,5 +1,5 @@
 # Select CRT on the databus
-LoadImm A, 0xf0
+LoadImm A, 0xe1
 Adr
 Data
 

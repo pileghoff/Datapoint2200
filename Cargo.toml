@@ -37,6 +37,7 @@ features = [
   "ScrollIntoViewOptions",
   "ScrollBehavior",
   "ScrollLogicalPosition",
-  "HtmlCollection"
+  "HtmlCollection",
+  "KeyboardEvent"
 ]
 

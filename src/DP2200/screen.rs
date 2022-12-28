@@ -11,7 +11,7 @@ pub struct Screen {
     pub cursor_enabled: bool,
 }
 
-pub const SCREEN_ADDR: u8 = 0o360;
+pub const SCREEN_ADDR: u8 = 0o341;
 
 impl Screen {
     pub fn new() -> Screen {
@@ -35,6 +35,10 @@ impl Screen {
             s.push('\n');
         }
         s
+    }
+
+    pub fn get_status(&self) -> u8 {
+        1 // Write ready is always true
     }
 
     pub fn write(&mut self, data: u8) {

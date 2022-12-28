@@ -9,6 +9,8 @@ use crate::DP2200::{
     screen::SCREEN_ADDR,
 };
 
+use super::keyboard::Keyboard;
+
 #[derive(Debug, PartialEq, Eq)]
 pub enum DatabusMode {
     Data,
@@ -70,9 +72,21 @@ pub struct Databus {
     pub clock: Receiver<u8>,
     pub dataline: Dataline,
     pub screen: Screen,
+    pub keyboard: Keyboard,
 }
 
 impl Databus {
+    fn update_status(&mut self) {
+        if self.selected_mode == DatabusMode::Status {
+            let status = match self.selected_addr {
+                SCREEN_ADDR => self.screen.get_status() | self.keyboard.get_status(),
+                _ => 0,
+            };
+
+            self.dataline.write(status);
+        }
+    }
+
     pub fn run(&mut self) {
         match self.clock.try_recv() {
             Ok(_) => {}
@@ -83,7 +97,6 @@ impl Databus {
         match self.dataline.get_command() {
             Ok(inst) => match inst.instruction_type {
                 InstructionType::Adr => {
-                    println!("Set addr");
                     self.selected_addr = self.dataline.read();
                     self.selected_mode = DatabusMode::Status;
                 }
@@ -92,6 +105,9 @@ impl Databus {
                 }
                 InstructionType::Data => {
                     self.selected_mode = DatabusMode::Data;
+                    if self.selected_addr == SCREEN_ADDR {
+                        self.dataline.write(self.keyboard.get_keycode());
+                    }
                 }
                 InstructionType::Write => {
                     if self.selected_addr == SCREEN_ADDR {
@@ -131,5 +147,7 @@ impl Databus {
             Err(TryRecvError::Empty) => {}
             Err(TryRecvError::Disconnected) => {}
         };
+
+        self.update_status();
     }
 }

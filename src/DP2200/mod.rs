@@ -5,4 +5,5 @@ pub mod databus;
 pub mod datapoint;
 pub mod disassembler;
 pub mod instruction;
+pub mod keyboard;
 pub mod screen;
