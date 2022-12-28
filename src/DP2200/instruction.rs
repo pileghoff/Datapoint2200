@@ -73,6 +73,14 @@ pub struct Instruction {
 }
 
 impl Instruction {
+    pub fn unknown() -> Instruction {
+        Instruction {
+            instruction_type: InstructionType::Unknown,
+            opcode: 0,
+            operand: None,
+            address: None,
+        }
+    }
     pub fn get_instruction_type(&self) -> u8 {
         (self.opcode & 0xc0) >> 6
     }

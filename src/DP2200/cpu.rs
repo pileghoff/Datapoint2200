@@ -14,7 +14,7 @@ pub struct Cpu {
     pub beta_registers: [u8; 7],
     pub beta_flipflops: [bool; 4],
     pub program_counter: u16,
-    pub instruction_register: Option<Instruction>,
+    pub instruction_register: Instruction,
     pub stack: Vec<u16>,
     pub intr: Receiver<u8>,
     pub dataline: Dataline,
@@ -181,11 +181,7 @@ impl Cpu {
             return false;
         }
 
-        if self.instruction_register.is_none() {
-            self.instruction_register = Some(self.fetch_instruction())
-        }
-
-        let inst = &self.instruction_register.unwrap();
+        let inst = self.instruction_register;
         let hl = self.get_hl_address();
         let s = inst.get_source();
         let d = inst.get_destination();
@@ -375,7 +371,7 @@ impl Cpu {
             InstructionType::Nop => {}
             InstructionType::Halt => {
                 self.halted = true;
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Pop => {
                 let value = self.pop_stack();
@@ -404,28 +400,28 @@ impl Cpu {
                 self.write_reg(0, self.dataline.read());
             }
             InstructionType::Adr => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Status => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Data => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Write => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Com1 => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Com2 => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Com3 => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Com4 => {
-                self.dataline.send_command(*inst);
+                self.dataline.send_command(inst);
             }
             InstructionType::Beep => {}
             InstructionType::Click => {}
@@ -456,7 +452,6 @@ impl Cpu {
         }
 
         self.dataline.write(self.read_reg(0));
-        self.instruction_register = None;
 
         !self.halted
     }

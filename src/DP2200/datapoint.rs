@@ -11,7 +11,7 @@ use crate::DP2200::{
     screen::Screen,
 };
 
-use super::keyboard::Keyboard;
+use super::{instruction::Instruction, keyboard::Keyboard};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
 pub enum DataPointRunStatus {
@@ -49,7 +49,7 @@ impl Datapoint {
                 stack: Vec::new(),
                 intr: cpu_intr.1,
                 dataline: dataline.0,
-                instruction_register: None,
+                instruction_register: Instruction::unknown(),
             },
             clock: Clock {
                 time_scale,
@@ -101,16 +101,14 @@ impl Datapoint {
         let goal_time = self.clock.emulated_time_ns + (delta_time_ms * 1_000_000.0) as u128;
 
         loop {
-            if self.cpu.instruction_register.is_none() {
-                self.cpu.instruction_register = Some(self.cpu.fetch_instruction());
+            self.cpu.instruction_register = self.cpu.fetch_instruction();
 
-                if self.breakpoints.contains(&self.cpu.program_counter) {
-                    return DataPointRunStatus::BreakpointHit;
-                }
+            if self.breakpoints.contains(&self.cpu.program_counter) {
+                return DataPointRunStatus::BreakpointHit;
             }
 
             self.clock
-                .ticks(self.cpu.instruction_register.unwrap().get_clock_cycles() as u128);
+                .ticks(self.cpu.instruction_register.get_clock_cycles() as u128);
 
             if !self.cpu.execute_instruction() {
                 break;
