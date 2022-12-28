@@ -1,11 +1,11 @@
-use std::cell::{Cell, RefCell};
+use std::cell::RefCell;
 use std::rc::Rc;
 
-use crate::DP2200::datapoint::{self, DataPointRunStatus, Datapoint};
+use crate::DP2200::datapoint::{DataPointRunStatus, Datapoint};
 use crate::DP2200::disassembler::Disassembler;
 use crate::DP2200::instruction::{FLAG_NAME, REG_NAME};
 use log::{info, trace, warn};
-use wasm_bindgen::{closure::WasmClosure, prelude::*, JsCast};
+use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{
     window, Document, Element, Event, HtmlButtonElement, HtmlTableCellElement, HtmlTableRowElement,
     KeyboardEvent,
@@ -301,7 +301,7 @@ impl UiState {
         self.update_element_by_id("register_table", table.as_str());
 
         let mut table = String::new();
-        for i in 0..3 {
+        for i in 0..4 {
             table.push_str(
                 format!(
                     "<tr><td>{}</td><td>{}</td><td>{}</td></tr>",

@@ -1,4 +1,4 @@
-use log::{info, trace, warn};
+use log::{error, info, trace, warn};
 
 use crate::time::Instant;
 use std::sync::mpsc::channel;
@@ -101,7 +101,15 @@ impl Datapoint {
         let goal_time = self.clock.emulated_time_ns + (delta_time_ms * 1_000_000.0) as u128;
 
         loop {
-            self.cpu.instruction_register = self.cpu.fetch_instruction();
+            let inst = self.cpu.fetch_instruction();
+            if inst.is_none() {
+                error!(
+                    "Could not fetch instruction. Cpu program counter: {}",
+                    self.cpu.program_counter
+                );
+                return DataPointRunStatus::Halted;
+            }
+            self.cpu.instruction_register = inst.unwrap();
 
             if self.breakpoints.contains(&self.cpu.program_counter) {
                 return DataPointRunStatus::BreakpointHit;
@@ -175,12 +183,12 @@ mod tests {
 
     #[test]
     fn test_write_to_screen() {
-        let program = vec!["LoadImm A, 0xf0", "Adr", "LoadImm A, 0x5a", "Write", "Halt"];
+        let program = vec!["LoadImm A, 0xe1", "Adr", "LoadImm A, 0x5a", "Write", "Halt"];
 
         let mut machine = Datapoint::new(program, 1.0);
         machine.run();
         let db = machine.databus;
-        assert_eq!(db.selected_addr, 0xf0);
+        assert_eq!(db.selected_addr, 0xe1);
         assert_eq!(db.screen.buffer[0][0], 'Z');
     }
 }

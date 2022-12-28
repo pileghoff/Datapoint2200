@@ -1,6 +1,6 @@
 use crate::DP2200::{databus::Dataline, instruction::*};
-use log::{info, trace, warn};
-use std::sync::mpsc::Receiver;
+use log::{error, info, trace, warn};
+use std::{fmt::Error, sync::mpsc::Receiver};
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -80,23 +80,15 @@ impl Cpu {
         }
     }
 
-    fn pop_stack(&mut self) -> u16 {
-        self.stack.pop().unwrap()
+    fn pop_stack(&mut self) -> Option<u16> {
+        self.stack.pop()
     }
 
-    pub fn fetch_instruction(&mut self) -> Instruction {
-        let opcode = self.get_from_mem();
-        if opcode.is_none() {
-            return Instruction {
-                instruction_type: InstructionType::Unknown,
-                opcode: 0,
-                operand: None,
-                address: None,
-            };
-        }
+    pub fn fetch_instruction(&mut self) -> Option<Instruction> {
+        let opcode = self.get_from_mem()?;
         let mut inst = Instruction {
             instruction_type: InstructionType::Unknown,
-            opcode: opcode.unwrap(),
+            opcode: opcode,
             operand: None,
             address: None,
         };
@@ -173,7 +165,7 @@ impl Cpu {
         inst.instruction_type = inst_type;
         inst.operand = operand;
 
-        inst
+        Some(inst)
     }
 
     pub fn execute_instruction(&mut self) -> bool {
@@ -348,16 +340,37 @@ impl Cpu {
                 }
             }
             InstructionType::Return => {
-                self.program_counter = self.pop_stack();
+                if let Some(addr) = self.pop_stack() {
+                    self.program_counter = addr;
+                } else {
+                    error!(
+                        "Tried to pop empty stack. Cpu program counter: {}, instruction: {:?}",
+                        self.program_counter, inst
+                    );
+                }
             }
             InstructionType::ReturnIf => {
                 if self.read_flag(c) {
-                    self.program_counter = self.pop_stack();
+                    if let Some(addr) = self.pop_stack() {
+                        self.program_counter = addr;
+                    } else {
+                        error!(
+                            "Tried to pop empty stack. Cpu program counter: {}, instruction: {:?}",
+                            self.program_counter, inst
+                        );
+                    }
                 }
             }
             InstructionType::ReturnIfNot => {
                 if !self.read_flag(c) {
-                    self.program_counter = self.pop_stack();
+                    if let Some(addr) = self.pop_stack() {
+                        self.program_counter = addr;
+                    } else {
+                        error!(
+                            "Tried to pop empty stack. Cpu program counter: {}, instruction: {:?}",
+                            self.program_counter, inst
+                        );
+                    }
                 }
             }
             InstructionType::ShiftRight => {
@@ -374,9 +387,15 @@ impl Cpu {
                 self.dataline.send_command(inst);
             }
             InstructionType::Pop => {
-                let value = self.pop_stack();
-                self.write_reg(5, ((value >> 8) & 0xff) as u8);
-                self.write_reg(6, (value & 0xff) as u8);
+                if let Some(value) = self.pop_stack() {
+                    self.write_reg(5, ((value >> 8) & 0xff) as u8);
+                    self.write_reg(6, (value & 0xff) as u8);
+                } else {
+                    error!(
+                        "Tried to pop empty stack. Cpu program counter: {}, instruction: {:?}",
+                        self.program_counter, inst
+                    );
+                }
             }
             InstructionType::Push => {
                 let mut value: u16 = self.read_reg(6) as u16;
@@ -468,7 +487,7 @@ mod tests {
     fn test_fetch_add_inst() {
         let program = vec!["Add 2"];
         let mut machine = Datapoint::new(program, 1.0);
-        let inst = machine.cpu.fetch_instruction();
+        let inst = machine.cpu.fetch_instruction().unwrap();
         assert_eq!(inst.instruction_type, InstructionType::Add);
         assert_eq!(inst.operand, None);
         assert_eq!(inst.get_source(), 2);
@@ -569,7 +588,7 @@ mod tests {
         let mut machine = Datapoint::new(program, 1.0);
         machine.run();
 
-        assert_eq!(machine.cpu.pop_stack(), 4);
+        assert_eq!(machine.cpu.pop_stack().unwrap(), 4);
     }
 
     #[test]
@@ -589,7 +608,7 @@ mod tests {
         let mut machine = Datapoint::new(program, 1.0);
         machine.run();
 
-        assert_eq!(machine.cpu.pop_stack(), 0x8877);
+        assert_eq!(machine.cpu.pop_stack().unwrap(), 0x8877);
     }
 
     #[test]

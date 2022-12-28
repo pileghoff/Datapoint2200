@@ -29,7 +29,11 @@ impl Disassembler {
         };
         while inst.instruction_type != InstructionType::Unknown {
             let program_counter = cpu.program_counter;
-            inst = cpu.fetch_instruction();
+            let tmp_inst = cpu.fetch_instruction();
+            if tmp_inst.is_none() {
+                break;
+            }
+            inst = tmp_inst.unwrap();
             let d = REG_NAME[inst.get_destination() as usize];
             let s = REG_NAME[inst.get_source() as usize];
 
