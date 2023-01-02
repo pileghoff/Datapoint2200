@@ -1,10 +1,11 @@
 use std::cell::RefCell;
 use std::rc::Rc;
 
+use crate::DP2200::cassette::*;
 use crate::DP2200::datapoint::{DataPointRunStatus, Datapoint};
-use crate::DP2200::disassembler::Disassembler;
+use crate::DP2200::disassembler::disassemble;
 use crate::DP2200::instruction::{FLAG_NAME, REG_NAME};
-use log::{info, trace, warn};
+use log::{info, trace};
 use wasm_bindgen::{prelude::*, JsCast};
 use web_sys::{
     window, Document, Element, Event, HtmlButtonElement, HtmlTableCellElement, HtmlTableRowElement,
@@ -15,8 +16,7 @@ use web_sys::{
 pub struct UiState {
     pub document: Document,
     pub datapoint: Datapoint,
-    pub disassembler: Disassembler,
-    pub disassembler_table_rows: Vec<String>,
+    pub disassembler: Vec<String>,
     pub running: bool,
     pub emulation_closure: Closure<dyn Fn(f64)>,
     last_animation_frame: f64,
@@ -52,27 +52,27 @@ impl State {
                 .keydown(event.key())
         });
 
-        let ui_state = self.ui_state.clone();
-        let keyup_handler: Closure<dyn Fn(_)> = Closure::new(move |event: KeyboardEvent| {
-            ui_state
-                .borrow_mut()
-                .datapoint
-                .databus
-                .keyboard
-                .keyup(event.key())
-        });
+        // let ui_state = self.ui_state.clone();
+        // let keyup_handler: Closure<dyn Fn(_)> = Closure::new(move |event: KeyboardEvent| {
+        //     ui_state
+        //         .borrow_mut()
+        //         .datapoint
+        //         .databus
+        //         .keyboard
+        //         .keyup(event.key())
+        // });
         self.ui_state
             .borrow()
             .document
             .add_event_listener_with_callback("keydown", keydown_handler.as_ref().unchecked_ref());
 
-        self.ui_state
-            .borrow()
-            .document
-            .add_event_listener_with_callback("keyup", keyup_handler.as_ref().unchecked_ref());
+        // self.ui_state
+        //     .borrow()
+        //     .document
+        //     .add_event_listener_with_callback("keyup", keyup_handler.as_ref().unchecked_ref());
 
         keydown_handler.forget();
-        keyup_handler.forget();
+        //keyup_handler.forget();
     }
 
     fn init_emulation_closure(&self) {
@@ -83,17 +83,21 @@ impl State {
                 return;
             }
 
-            let delta_time_ms = time_stamp - ui_state.borrow().last_animation_frame;
+            let mut delta_time_ms = time_stamp - ui_state.borrow().last_animation_frame;
+            if delta_time_ms > 30.0 {
+                delta_time_ms = 30.0;
+            }
             ui_state.borrow_mut().last_animation_frame = time_stamp;
             let emulation_result = ui_state.borrow_mut().datapoint.update(delta_time_ms);
 
-            trace!("{:?}", emulation_result);
             if emulation_result == DataPointRunStatus::Ok {
                 ui_state.borrow().request_animation_frame();
                 ui_state.borrow().draw_screen();
             } else {
+                info!("{:?}", emulation_result);
                 ui_state.borrow_mut().running = false;
                 ui_state.borrow_mut().draw();
+                ui_state.borrow().focus_row();
             }
         });
     }
@@ -102,6 +106,7 @@ impl State {
         let ui_state = self.ui_state.clone();
         let pause_closure = Closure::<dyn Fn(_)>::new(move |_event: Event| {
             ui_state.borrow_mut().running = false;
+            ui_state.borrow().focus_row();
         });
 
         self.add_event("pause", "click", pause_closure);
@@ -128,13 +133,9 @@ impl State {
                     .dyn_into::<HtmlTableRowElement>()
                 {
                     let mut breakpoint_addr = None;
+                    let disassembled = disassemble(&ui_state.borrow().datapoint.cpu.memory);
                     if row.row_index() != -1 {
-                        if let Some((addr, _)) = ui_state
-                            .borrow()
-                            .disassembler
-                            .addr_to_line
-                            .get((row.row_index() - 1) as usize)
-                        {
+                        if let Some((addr, _)) = disassembled.get((row.row_index() - 1) as usize) {
                             breakpoint_addr = Some(*addr);
                         }
                     }
@@ -182,8 +183,12 @@ impl State {
 
     pub fn load_program(&self, program: Vec<u8>) {
         self.ui_state.borrow_mut().running = false;
-        self.ui_state.borrow_mut().datapoint.load_program(&program);
-        self.ui_state.borrow_mut().disassembler = Disassembler::from_vec(&program);
+        self.ui_state
+            .borrow_mut()
+            .datapoint
+            .load_cassette(program.clone());
+
+        let cpu_mem = self.ui_state.borrow().datapoint.cpu.memory.clone();
     }
 
     pub fn draw_disassembler(&self) {
@@ -208,9 +213,8 @@ impl UiState {
             document: window.document().expect("No document found"),
             running: false,
             datapoint,
-            disassembler: Disassembler::from_vec(&Vec::new()),
-            disassembler_table_rows: Vec::new(),
-            emulation_closure: emulation_closure,
+            disassembler: Vec::new(),
+            emulation_closure,
             last_animation_frame: 0.0,
         }
     }
@@ -318,6 +322,49 @@ impl UiState {
         self.draw_stack();
     }
 
+    pub fn draw_databus_state(&mut self) {
+        let databus = &self.datapoint.databus;
+        self.update_element_by_id(
+            "databus_selected",
+            format!("{:#03o}", databus.selected_addr).as_str(),
+        );
+        self.update_element_by_id(
+            "databus_mode",
+            format!("{:?}", databus.selected_mode).as_str(),
+        );
+
+        self.update_element_by_id(
+            "databus_data_out",
+            format!("{:?}", databus.dataline.read()).as_str(),
+        );
+
+        self.update_element_by_id(
+            "databus_data_in",
+            format!("{:?}", self.datapoint.cpu.dataline.read()).as_str(),
+        );
+
+        self.update_element_by_id(
+            "cassette_deck",
+            format!("{:?}", self.datapoint.databus.cassette.selected_deck).as_str(),
+        );
+
+        let speed = self.datapoint.databus.cassette.get_selected_deck().speed;
+        self.update_element_by_id("cassette_speed", format!("{:?}", speed).as_str());
+
+        let dir = self
+            .datapoint
+            .databus
+            .cassette
+            .get_selected_deck()
+            .direction;
+        self.update_element_by_id("cassette_dir", format!("{:?}", dir).as_str());
+
+        let head_pos = self.datapoint.databus.cassette.get_selected_deck().head_pos;
+        self.update_element_by_id("cassette_pos", format!("{}", head_pos).as_str());
+
+        let status = self.datapoint.databus.cassette.get_status();
+        self.update_element_by_id("cassette_status", format!("{}", status).as_str());
+    }
     pub fn draw(&mut self) {
         if self.running {
             self.disable_button("single_step", true);
@@ -328,6 +375,7 @@ impl UiState {
             self.disable_button("run", false);
             self.disable_button("pause", true);
             self.draw_cpu_status();
+            self.draw_databus_state();
             self.draw_disassembler();
         }
 

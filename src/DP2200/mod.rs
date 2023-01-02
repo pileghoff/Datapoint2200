@@ -1,4 +1,5 @@
 pub mod assembler;
+pub mod cassette;
 pub mod clock;
 pub mod cpu;
 pub mod databus;

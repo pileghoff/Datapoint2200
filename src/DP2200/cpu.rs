@@ -1,6 +1,6 @@
 use crate::DP2200::{databus::Dataline, instruction::*};
-use log::{error, info, trace, warn};
-use std::{fmt::Error, sync::mpsc::Receiver};
+use log::{error, info, trace};
+use std::sync::mpsc::Receiver;
 
 #[derive(Debug)]
 pub struct Cpu {
@@ -88,7 +88,7 @@ impl Cpu {
         let opcode = self.get_from_mem()?;
         let mut inst = Instruction {
             instruction_type: InstructionType::Unknown,
-            opcode: opcode,
+            opcode,
             operand: None,
             address: None,
         };
@@ -174,11 +174,14 @@ impl Cpu {
         }
 
         let inst = self.instruction_register;
-        let hl = self.get_hl_address();
+        let hl = self.get_hl_address() % self.memory.len() as u16;
         let s = inst.get_source();
         let d = inst.get_destination();
         let c = if d >= 4 { d - 4 } else { d };
-        trace!("Execute inst: {:?}", inst.instruction_type);
+        // info!(
+        //     "{:#04x}: {:?}",
+        //     self.program_counter, self.instruction_register
+        // );
         match inst.instruction_type {
             InstructionType::LoadImm => {
                 self.write_reg(d, inst.operand.unwrap());
@@ -188,7 +191,6 @@ impl Cpu {
                     self.halted = true;
                 } else if d == 7 {
                     if hl as usize > self.memory.len() {
-                        info!("{:?}:{}:{}", inst, self.program_counter, hl);
                     } else {
                         self.memory[hl as usize] = self.read_reg(s);
                     }
@@ -417,6 +419,7 @@ impl Cpu {
             InstructionType::Unknown => panic!("Unknown instruction"),
             InstructionType::Input => {
                 self.write_reg(0, self.dataline.read());
+                self.dataline.send_strobe();
             }
             InstructionType::Adr => {
                 self.dataline.send_command(inst);
@@ -442,17 +445,39 @@ impl Cpu {
             InstructionType::Com4 => {
                 self.dataline.send_command(inst);
             }
-            InstructionType::Beep => {}
-            InstructionType::Click => {}
-            InstructionType::Deck1 => {}
-            InstructionType::Deck2 => {}
-            InstructionType::Rbk => {}
-            InstructionType::Wbk => {}
-            InstructionType::Bsp => {}
-            InstructionType::Sf => {}
-            InstructionType::Sb => {}
-            InstructionType::Rewind => {}
-            InstructionType::Tstop => {}
+            InstructionType::Beep => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Click => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Deck1 => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Deck2 => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Rbk => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Wbk => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Bsp => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Sf => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Sb => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Rewind => {
+                self.dataline.send_command(inst);
+            }
+            InstructionType::Tstop => {
+                self.dataline.send_command(inst);
+            }
         };
 
         let intr_happened = self.intr.try_recv();
@@ -482,6 +507,16 @@ mod tests {
 
     use super::*;
     use crate::DP2200::datapoint::Datapoint;
+
+    fn init_logger() {
+        let _ = env_logger::builder()
+            // Include all events in tests
+            .filter_level(log::LevelFilter::max())
+            // Ensure events are captured by `cargo test`
+            .is_test(true)
+            // Ignore errors initializing the logger if tests race to configure it
+            .try_init();
+    }
 
     #[test]
     fn test_fetch_add_inst() {
@@ -513,6 +548,8 @@ mod tests {
 
     #[test]
     fn test_add_inst() {
+        init_logger();
+
         let program = vec!["LoadImm A, 10", "AddImm 10", "Halt"];
         let mut machine = Datapoint::new(program, 1.0);
 

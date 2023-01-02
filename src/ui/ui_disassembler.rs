@@ -1,9 +1,7 @@
-use log::info;
 use wasm_bindgen::JsCast;
-use web_sys::{
-    Document, HtmlElement, HtmlTableCellElement, HtmlTableElement, HtmlTableRowElement,
-    ScrollBehavior, ScrollIntoViewOptions, ScrollLogicalPosition,
-};
+use web_sys::{HtmlElement, ScrollBehavior, ScrollIntoViewOptions, ScrollLogicalPosition};
+
+use crate::DP2200::{disassembler::disassemble, instruction::Instruction};
 
 use super::ui::UiState;
 
@@ -44,16 +42,17 @@ impl UiState {
             .dyn_into::<HtmlElement>()
             .unwrap();
 
-        for (index, (addr, text)) in self.disassembler.addr_to_line.iter().enumerate() {
+        let disassembler = disassemble(&self.datapoint.cpu.memory);
+        for (index, (addr, text)) in disassembler.iter().enumerate() {
             let row_str = self.construct_row(*addr, text);
-            if let Some(row_cached) = self.disassembler_table_rows.get_mut(index) {
+            if let Some(row_cached) = self.disassembler.get_mut(index) {
                 if *row_cached == row_str {
                     continue;
                 }
 
                 row_cached.replace_range(.., &row_str);
             } else {
-                self.disassembler_table_rows.push(row_str.clone());
+                self.disassembler.push(row_str.clone());
             }
 
             if let Some(child_to_replace) = table.children().get_with_index(index as u32) {

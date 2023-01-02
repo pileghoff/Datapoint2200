@@ -13,7 +13,8 @@
     />
     <style>
       #disassembler {
-        grid-column: 3;
+        grid-column-start: 3;
+        grid-column-end: 4;
         grid-row: 2;
       }
 
@@ -112,6 +113,28 @@
             <tbody id="mem_table"></tbody>
           </table>
         </div>
+      </div>
+      <div id="databus">
+        <table>
+            <th colspan="4">Databus</th>
+            <tbody>
+              <tr><td>Selected address</td><tr id="databus_selected"></tr></tr>
+              <tr><td>Selected mode</td><tr id="databus_mode"></tr></tr>
+              <tr><td>Data to cpu</td><tr id="databus_data_in"></tr></tr>
+              <tr><td>Data from cpu</td><tr id="databus_data_out"></tr></tr>
+            </tbody>
+        </table>
+
+        <table>
+            <th colspan="4">Cassette</th>
+            <tbody>
+              <tr><td>Selected deck</td><tr id="cassette_deck"></tr></tr>
+              <tr><td>Speed</td><tr id="cassette_speed"></tr></tr>
+              <tr><td>Direction</td><tr id="cassette_dir"></tr></tr>
+              <tr><td>Headpos</td><tr id="cassette_pos"></tr></tr>
+              <tr><td>Status</td><tr id="cassette_status"></tr></tr>
+            </tbody>
+        </table>
       </div>
     </div>
   </body>

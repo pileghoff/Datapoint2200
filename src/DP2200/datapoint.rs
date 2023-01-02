@@ -1,7 +1,7 @@
-use log::{error, info, trace, warn};
+use log::{error, info, trace};
 
 use crate::time::Instant;
-use std::sync::mpsc::channel;
+use std::{collections::VecDeque, sync::mpsc::channel};
 
 use crate::DP2200::{
     assembler::assemble,
@@ -11,7 +11,11 @@ use crate::DP2200::{
     screen::Screen,
 };
 
-use super::{instruction::Instruction, keyboard::Keyboard};
+use super::{
+    cassette::{Cassette, DeckId},
+    instruction::Instruction,
+    keyboard::Keyboard,
+};
 
 #[derive(Debug, Clone, Copy, PartialEq, PartialOrd, Eq)]
 pub enum DataPointRunStatus {
@@ -26,6 +30,7 @@ pub struct Datapoint {
     pub clock: Clock,
     pub databus: Databus,
     pub breakpoints: Vec<u16>,
+    pub callstack: VecDeque<u16>,
 }
 
 impl Datapoint {
@@ -65,8 +70,14 @@ impl Datapoint {
                 dataline: dataline.1,
                 screen: Screen::new(),
                 keyboard: Keyboard::new(),
+                cassette: Cassette::new(),
             },
+            callstack: VecDeque::new(),
         };
+
+        if program.len() > res.cpu.memory.len() {
+            error!("{} is longer than {}", program.len(), res.cpu.memory.len());
+        }
 
         for (i, b) in program.iter().enumerate() {
             res.cpu.memory[i] = *b;
@@ -92,6 +103,12 @@ impl Datapoint {
         self.breakpoints = Vec::new();
     }
 
+    pub fn load_cassette(&mut self, tap_file: Vec<u8>) {
+        self.databus.cassette.load(DeckId::Deck1, tap_file);
+        let program = self.databus.cassette.get_first_sector();
+        self.load_program(&program);
+    }
+
     pub fn update(&mut self, delta_time_ms: f64) -> DataPointRunStatus {
         if self.cpu.halted {
             trace!("Total execution time: {}", self.clock.emulated_time_ns);
@@ -101,6 +118,8 @@ impl Datapoint {
         let goal_time = self.clock.emulated_time_ns + (delta_time_ms * 1_000_000.0) as u128;
 
         loop {
+            self.callstack.push_front(self.cpu.program_counter);
+            self.callstack.truncate(30);
             let inst = self.cpu.fetch_instruction();
             if inst.is_none() {
                 error!(
@@ -111,10 +130,6 @@ impl Datapoint {
             }
             self.cpu.instruction_register = inst.unwrap();
 
-            if self.breakpoints.contains(&self.cpu.program_counter) {
-                return DataPointRunStatus::BreakpointHit;
-            }
-
             self.clock
                 .ticks(self.cpu.instruction_register.get_clock_cycles() as u128);
 
@@ -124,7 +139,17 @@ impl Datapoint {
 
             self.databus.run();
 
-            if self.clock.emulated_time_ns >= goal_time {
+            if self.breakpoints.contains(&self.cpu.program_counter) {
+                let callstack: Vec<String> = self
+                    .callstack
+                    .iter()
+                    .map(|e| format!("{:#04x}", e))
+                    .collect();
+                info!("{:?}", callstack);
+                return DataPointRunStatus::BreakpointHit;
+            }
+
+            if self.clock.emulated_time_ns >= goal_time || self.cpu.halted {
                 break;
             }
         }
@@ -133,12 +158,19 @@ impl Datapoint {
     }
 
     pub fn single_step(&mut self) -> DataPointRunStatus {
-        loop {
-            self.clock.single_clock();
-            if self.cpu.execute_instruction() {
-                break;
-            }
+        let inst = self.cpu.fetch_instruction();
+        if inst.is_none() {
+            error!(
+                "Could not fetch instruction. Cpu program counter: {}",
+                self.cpu.program_counter
+            );
+            return DataPointRunStatus::Halted;
         }
+        self.cpu.instruction_register = inst.unwrap();
+
+        self.clock
+            .ticks(self.cpu.instruction_register.get_clock_cycles() as u128);
+        self.cpu.execute_instruction();
 
         self.databus.run();
 
@@ -154,7 +186,7 @@ impl Datapoint {
             self.update(10.0);
         }
 
-        return self.clock.emulated_time_ns;
+        self.clock.emulated_time_ns
     }
 
     pub fn toggle_breakpoint(&mut self, addr: u16) {

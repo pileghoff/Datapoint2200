@@ -540,4 +540,5 @@ mod tests {
         let res = assemble(program);
         println!("{:?}", res);
     }
+
 }

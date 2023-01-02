@@ -25,6 +25,14 @@ impl Screen {
         }
     }
 
+    pub fn clock(&self) {}
+
+    pub fn strobe(&self) {}
+
+    pub fn get_data(&self) -> u8 {
+        0
+    }
+
     pub fn get_screen(&self) -> String {
         let mut s = String::new();
 
@@ -41,7 +49,7 @@ impl Screen {
         1 // Write ready is always true
     }
 
-    pub fn write(&mut self, data: u8) {
+    pub fn write_data(&mut self, data: u8) {
         self.buffer[self.cursor.line][self.cursor.character] = data as char;
     }
 
