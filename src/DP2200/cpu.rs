@@ -2,6 +2,8 @@ use crate::DP2200::{databus::Dataline, instruction::*};
 use log::{error, info, trace};
 use std::sync::mpsc::Receiver;
 
+use super::databus::{Databus, DatabusMode};
+
 #[derive(Debug)]
 pub struct Cpu {
     pub halted: bool,
@@ -16,8 +18,6 @@ pub struct Cpu {
     pub program_counter: u16,
     pub instruction_register: Instruction,
     pub stack: Vec<u16>,
-    pub intr: Receiver<u8>,
-    pub dataline: Dataline,
 }
 
 impl Cpu {
@@ -82,6 +82,10 @@ impl Cpu {
 
     fn pop_stack(&mut self) -> Option<u16> {
         self.stack.pop()
+    }
+
+    pub fn interrupt(&mut self) {
+        self.intr_saved = true;
     }
 
     pub fn fetch_instruction(&mut self) -> Option<Instruction> {
@@ -168,9 +172,9 @@ impl Cpu {
         Some(inst)
     }
 
-    pub fn execute_instruction(&mut self) -> bool {
+    pub fn execute_instruction(&mut self, databus: &mut Databus) {
         if self.halted {
-            return false;
+            return;
         }
 
         let inst = self.instruction_register;
@@ -386,7 +390,7 @@ impl Cpu {
             InstructionType::Nop => {}
             InstructionType::Halt => {
                 self.halted = true;
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Pop => {
                 if let Some(value) = self.pop_stack() {
@@ -418,71 +422,66 @@ impl Cpu {
             }
             InstructionType::Unknown => panic!("Unknown instruction"),
             InstructionType::Input => {
-                self.write_reg(0, self.dataline.read());
-                self.dataline.send_strobe();
+                self.write_reg(0, databus.read_bus());
+                databus.strobe();
             }
             InstructionType::Adr => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Status => {
-                self.dataline.send_command(inst);
+                databus.set_mode(DatabusMode::Status);
             }
             InstructionType::Data => {
-                self.dataline.send_command(inst);
+                databus.set_mode(DatabusMode::Data);
             }
             InstructionType::Write => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Com1 => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Com2 => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Com3 => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Com4 => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Beep => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Click => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Deck1 => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Deck2 => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Rbk => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Wbk => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Bsp => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Sf => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Sb => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Rewind => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
             InstructionType::Tstop => {
-                self.dataline.send_command(inst);
+                databus.execute_command(inst, self.read_reg(0));
             }
-        };
-
-        let intr_happened = self.intr.try_recv();
-        if intr_happened.is_ok() {
-            self.intr_saved = true;
         };
 
         if self.intr_saved {
@@ -494,10 +493,6 @@ impl Cpu {
                 self.intr_saved = false;
             }
         }
-
-        self.dataline.write(self.read_reg(0));
-
-        !self.halted
     }
 }
 

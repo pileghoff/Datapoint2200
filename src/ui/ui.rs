@@ -323,7 +323,7 @@ impl UiState {
     }
 
     pub fn draw_databus_state(&mut self) {
-        let databus = &self.datapoint.databus;
+        let mut databus = self.datapoint.databus.clone();
         self.update_element_by_id(
             "databus_selected",
             format!("{:#03o}", databus.selected_addr).as_str(),
@@ -335,12 +335,12 @@ impl UiState {
 
         self.update_element_by_id(
             "databus_data_out",
-            format!("{:?}", databus.dataline.read()).as_str(),
+            format!("{:?}", databus.read_bus()).as_str(),
         );
 
         self.update_element_by_id(
             "databus_data_in",
-            format!("{:?}", self.datapoint.cpu.dataline.read()).as_str(),
+            format!("{:?}", self.datapoint.cpu.alpha_registers[0]).as_str(),
         );
 
         self.update_element_by_id(

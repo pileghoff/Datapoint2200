@@ -1,13 +1,12 @@
 use crate::time::Instant;
 use std::sync::mpsc::Sender;
 
+use super::{cpu::Cpu, databus::Databus};
+
 #[derive(Debug, Clone)]
 pub struct Clock {
     pub time_scale: f32,
     pub emulated_time_ns: u128,
-    pub cpu_intr: Sender<u8>,
-    pub databus_clock: Sender<u8>,
-    pub last_time: Instant,
 }
 
 const CYCLE_TIME_NS: u128 = 1_600;
@@ -25,17 +24,17 @@ impl Clock {
             > ((self.emulated_time_ns + CYCLE_TIME_NS * cycles) % trigger_time)
     }
 
-    pub fn single_clock(&mut self) {
-        self.ticks(1);
+    pub fn single_clock(&mut self, cpu: &mut Cpu, databus: &mut Databus) {
+        self.ticks(1, cpu, databus);
     }
 
-    pub fn ticks(&mut self, num_clocks: u128) {
+    pub fn ticks(&mut self, num_clocks: u128, cpu: &mut Cpu, databus: &mut Databus) {
         if self.check_trigger(INTR_TIME_NS, num_clocks) {
-            self.cpu_intr.send(0).unwrap();
+            cpu.interrupt();
         }
 
         if self.check_trigger(DATABUS_CLOCK_NS, num_clocks) {
-            self.databus_clock.send(0).unwrap();
+            databus.clock();
         }
 
         self.emulated_time_ns += CYCLE_TIME_NS * num_clocks;

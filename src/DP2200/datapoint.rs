@@ -30,13 +30,10 @@ pub struct Datapoint {
     pub clock: Clock,
     pub databus: Databus,
     pub breakpoints: Vec<u16>,
-    pub callstack: VecDeque<u16>,
 }
 
 impl Datapoint {
     pub fn build(program: &[u8], time_scale: f32) -> Datapoint {
-        let cpu_intr = channel::<u8>();
-        let databus_clock = channel::<u8>();
         let dataline = Dataline::generate_pair();
         let mut res = Datapoint {
             breakpoints: Vec::new(),
@@ -52,27 +49,19 @@ impl Datapoint {
                 beta_flipflops: [false, false, false, false],
                 program_counter: 0,
                 stack: Vec::new(),
-                intr: cpu_intr.1,
-                dataline: dataline.0,
                 instruction_register: Instruction::unknown(),
             },
             clock: Clock {
                 time_scale,
                 emulated_time_ns: 0,
-                cpu_intr: cpu_intr.0,
-                databus_clock: databus_clock.0,
-                last_time: Instant::now(),
             },
             databus: Databus {
                 selected_addr: 0,
                 selected_mode: DatabusMode::Status,
-                clock: databus_clock.1,
-                dataline: dataline.1,
                 screen: Screen::new(),
                 keyboard: Keyboard::new(),
                 cassette: Cassette::new(),
             },
-            callstack: VecDeque::new(),
         };
 
         if program.len() > res.cpu.memory.len() {
@@ -118,8 +107,6 @@ impl Datapoint {
         let goal_time = self.clock.emulated_time_ns + (delta_time_ms * 1_000_000.0) as u128;
 
         loop {
-            self.callstack.push_front(self.cpu.program_counter);
-            self.callstack.truncate(30);
             let inst = self.cpu.fetch_instruction();
             if inst.is_none() {
                 error!(
@@ -130,31 +117,28 @@ impl Datapoint {
             }
             self.cpu.instruction_register = inst.unwrap();
 
-            self.clock
-                .ticks(self.cpu.instruction_register.get_clock_cycles() as u128);
+            self.clock.ticks(
+                self.cpu.instruction_register.get_clock_cycles() as u128,
+                &mut self.cpu,
+                &mut self.databus,
+            );
 
-            if !self.cpu.execute_instruction() {
-                break;
-            }
+            self.cpu.execute_instruction(&mut self.databus);
 
-            self.databus.run();
+            self.databus.update();
 
             if self.breakpoints.contains(&self.cpu.program_counter) {
-                let callstack: Vec<String> = self
-                    .callstack
-                    .iter()
-                    .map(|e| format!("{:#04x}", e))
-                    .collect();
-                info!("{:?}", callstack);
                 return DataPointRunStatus::BreakpointHit;
             }
 
-            if self.clock.emulated_time_ns >= goal_time || self.cpu.halted {
-                break;
+            if self.cpu.halted {
+                return DataPointRunStatus::Halted;
+            }
+
+            if self.clock.emulated_time_ns >= goal_time {
+                return DataPointRunStatus::Ok;
             }
         }
-
-        DataPointRunStatus::Ok
     }
 
     pub fn single_step(&mut self) -> DataPointRunStatus {
@@ -168,11 +152,14 @@ impl Datapoint {
         }
         self.cpu.instruction_register = inst.unwrap();
 
-        self.clock
-            .ticks(self.cpu.instruction_register.get_clock_cycles() as u128);
-        self.cpu.execute_instruction();
+        self.clock.ticks(
+            self.cpu.instruction_register.get_clock_cycles() as u128,
+            &mut self.cpu,
+            &mut self.databus,
+        );
+        self.cpu.execute_instruction(&mut self.databus);
 
-        self.databus.run();
+        self.databus.update();
 
         if self.cpu.halted {
             return DataPointRunStatus::Halted;

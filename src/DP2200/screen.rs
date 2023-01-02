@@ -1,10 +1,9 @@
-#[derive(Debug)]
-
+#[derive(Debug, Clone)]
 pub struct Cursor {
     line: usize,
     character: usize,
 }
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Screen {
     pub buffer: [[char; 80]; 12],
     pub cursor: Cursor,

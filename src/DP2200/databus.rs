@@ -15,7 +15,7 @@ use crate::DP2200::{
 
 use super::keyboard::Keyboard;
 
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum DatabusMode {
     Data,
     Status,
@@ -86,19 +86,17 @@ impl Dataline {
     }
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct Databus {
     pub selected_addr: u8,
     pub selected_mode: DatabusMode,
-    pub clock: Receiver<u8>,
-    pub dataline: Dataline,
     pub screen: Screen,
     pub keyboard: Keyboard,
     pub cassette: Cassette,
 }
 
 impl Databus {
-    fn update_status(&mut self) {
+    fn read_status(&mut self) -> u8 {
         if self.selected_mode == DatabusMode::Status {
             let mut status = 0;
             if self.selected_addr == CASSETTE_ADDR {
@@ -113,11 +111,12 @@ impl Databus {
                 status |= self.keyboard.get_status();
             }
 
-            self.dataline.write(status);
+            return status;
         }
+        0
     }
 
-    fn update_data(&mut self) {
+    fn read_data(&mut self) -> u8 {
         if self.selected_mode == DatabusMode::Data {
             let mut data = 0;
             if self.selected_addr == CASSETTE_ADDR {
@@ -131,9 +130,14 @@ impl Databus {
             if self.selected_addr == KEYBOARD_ADDR {
                 data |= self.keyboard.get_data();
             }
-
-            self.dataline.write(data);
+            info!("Get data: {}", data);
+            return data;
         }
+        0
+    }
+
+    pub fn read_bus(&mut self) -> u8 {
+        self.read_data() | self.read_status()
     }
 
     pub fn write_data(&mut self, data: u8) {
@@ -163,7 +167,7 @@ impl Databus {
             self.keyboard.clock();
         }
 
-        self.update_status();
+        self.read_status();
     }
 
     pub fn strobe(&mut self) {
@@ -181,34 +185,36 @@ impl Databus {
         }
     }
 
-    pub fn execute_command(&mut self, inst: Instruction) {
+    pub fn set_addr(&mut self, addr: u8) {
+        self.selected_addr = addr;
+        self.selected_mode = DatabusMode::Status;
+    }
+
+    pub fn set_mode(&mut self, mode: DatabusMode) {
+        self.selected_mode = mode;
+    }
+
+    pub fn execute_command(&mut self, inst: Instruction, data: u8) {
         match inst.instruction_type {
             InstructionType::Adr => {
-                self.selected_addr = self.dataline.read();
-                self.selected_mode = DatabusMode::Status;
-            }
-            InstructionType::Status => {
-                self.selected_mode = DatabusMode::Status;
-            }
-            InstructionType::Data => {
-                self.selected_mode = DatabusMode::Data;
+                self.set_addr(data);
             }
             InstructionType::Write => {
-                self.write_data(self.dataline.read());
+                self.write_data(data);
             }
             InstructionType::Com1 => {
                 if self.selected_addr == SCREEN_ADDR {
-                    self.screen.control_word(self.dataline.read());
+                    self.screen.control_word(data);
                 }
             }
             InstructionType::Com2 => {
                 if self.selected_addr == SCREEN_ADDR {
-                    self.screen.set_horizontal(self.dataline.read());
+                    self.screen.set_horizontal(data);
                 }
             }
             InstructionType::Com3 => {
                 if self.selected_addr == SCREEN_ADDR {
-                    self.screen.set_vertical(self.dataline.read());
+                    self.screen.set_vertical(data);
                 }
             }
             InstructionType::Com4 => todo!(),
@@ -228,27 +234,8 @@ impl Databus {
         }
     }
 
-    pub fn run(&mut self) {
-        match self.clock.try_recv() {
-            Ok(_) => {
-                self.clock();
-            }
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => {}
-        };
-
-        if self.dataline.get_strobe() {
-            self.strobe();
-        }
-
-        let command = self.dataline.get_command();
-        match command {
-            Ok(inst) => self.execute_command(inst),
-            Err(TryRecvError::Empty) => {}
-            Err(TryRecvError::Disconnected) => {}
-        };
-
-        self.update_data();
-        self.update_status();
+    pub fn update(&mut self) {
+        self.read_data();
+        self.read_status();
     }
 }
