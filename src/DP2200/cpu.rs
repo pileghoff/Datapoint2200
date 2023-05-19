@@ -1,4 +1,4 @@
-use crate::DP2200::{databus::Dataline, instruction::*};
+use crate::DP2200::instruction::*;
 use log::{error, info, trace};
 use std::sync::mpsc::Receiver;
 
@@ -9,7 +9,7 @@ pub struct Cpu {
     pub halted: bool,
     pub intr_enabled: bool,
     pub intr_saved: bool,
-    pub memory: [u8; 4096],
+    pub memory: [u8; 8192],
     pub alpha_mode: bool,
     pub alpha_registers: [u8; 7],
     pub alpha_flipflops: [bool; 4],
@@ -32,6 +32,10 @@ impl Cpu {
     }
 
     fn write_reg(&mut self, index: u8, value: u8) {
+        if index == 7 {
+            self.memory[self.get_hl_address() as usize] = value;
+        }
+
         if self.alpha_mode {
             self.alpha_registers[index as usize] = value;
         } else {
@@ -40,6 +44,9 @@ impl Cpu {
     }
 
     fn read_reg(&self, index: u8) -> u8 {
+        if index == 7 {
+            return self.memory[self.get_hl_address() as usize];
+        }
         if self.alpha_mode {
             self.alpha_registers[index as usize]
         } else {
@@ -178,7 +185,7 @@ impl Cpu {
         }
 
         let inst = self.instruction_register;
-        let hl = self.get_hl_address() % self.memory.len() as u16;
+        let hl = self.get_hl_address();
         let s = inst.get_source();
         let d = inst.get_destination();
         let c = if d >= 4 { d - 4 } else { d };
@@ -194,12 +201,15 @@ impl Cpu {
                 if d == 7 && s == 7 {
                     self.halted = true;
                 } else if d == 7 {
-                    if hl as usize > self.memory.len() {
+                    if hl as usize >= self.memory.len() {
                     } else {
                         self.memory[hl as usize] = self.read_reg(s);
                     }
                 } else if s == 7 {
-                    self.write_reg(d, self.memory[hl as usize]);
+                    if hl as usize >= self.memory.len() {
+                    } else {
+                        self.write_reg(d, self.memory[hl as usize]);
+                    }
                 } else {
                     self.write_reg(d, self.read_reg(s));
                 }

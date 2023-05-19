@@ -21,71 +21,6 @@ pub enum DatabusMode {
     Status,
 }
 
-#[derive(Debug)]
-pub struct Dataline {
-    writer: Arc<RwLock<u8>>,
-    reader: Arc<RwLock<u8>>,
-    command_sender: Sender<Instruction>,
-    command_receiver: Receiver<Instruction>,
-    strobe_sender: Sender<u8>,
-    strobe_receiver: Receiver<u8>,
-}
-
-impl Dataline {
-    pub fn generate_pair() -> (Dataline, Dataline) {
-        let left = Arc::new(RwLock::new(0));
-        let right = Arc::new(RwLock::new(0));
-        let command_left = channel();
-        let command_right = channel();
-
-        let strobe_left = channel();
-        let strobe_right = channel();
-
-        (
-            Dataline {
-                writer: left.clone(),
-                reader: right.clone(),
-                command_sender: command_left.0,
-                command_receiver: command_right.1,
-                strobe_sender: strobe_left.0,
-                strobe_receiver: strobe_right.1,
-            },
-            Dataline {
-                writer: right,
-                reader: left,
-                command_sender: command_right.0,
-                command_receiver: command_left.1,
-                strobe_sender: strobe_right.0,
-                strobe_receiver: strobe_left.1,
-            },
-        )
-    }
-
-    pub fn read(&self) -> u8 {
-        *self.reader.read().unwrap()
-    }
-
-    pub fn write(&mut self, val: u8) {
-        *self.writer.write().unwrap() = val;
-    }
-
-    pub fn send_command(&self, inst: Instruction) {
-        self.command_sender.send(inst).unwrap();
-    }
-
-    pub fn get_command(&self) -> Result<Instruction, TryRecvError> {
-        self.command_receiver.try_recv()
-    }
-
-    pub fn send_strobe(&self) {
-        self.strobe_sender.send(0).unwrap();
-    }
-
-    pub fn get_strobe(&self) -> bool {
-        self.strobe_receiver.try_recv().is_ok()
-    }
-}
-
 #[derive(Debug, Clone)]
 pub struct Databus {
     pub selected_addr: u8,
@@ -130,7 +65,6 @@ impl Databus {
             if self.selected_addr == KEYBOARD_ADDR {
                 data |= self.keyboard.get_data();
             }
-            info!("Get data: {}", data);
             return data;
         }
         0
@@ -218,8 +152,8 @@ impl Databus {
                 }
             }
             InstructionType::Com4 => todo!(),
-            InstructionType::Beep => todo!(),
-            InstructionType::Click => todo!(),
+            InstructionType::Beep => {}
+            InstructionType::Click => {}
             InstructionType::Deck1 => self.cassette.ex_deck1(),
             InstructionType::Deck2 => self.cassette.ex_deck2(),
             InstructionType::Rbk => self.cassette.ex_rbk(),

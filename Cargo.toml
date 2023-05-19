@@ -4,8 +4,11 @@ version = "0.1.0"
 edition = "2021"
 rust-version = "1.65"
 
-[lib]
-crate-type = ["cdylib"]
+[[bin]]
+name = "disassemble_tap"
+path = "src/main.rs"
+test = false
+bench = false
 
 [dependencies]
 parse_int = "0.6.0"
@@ -16,6 +19,7 @@ log = "0.4.17"
 test-log = "0.2.11"
 console_log = "0.2.0"
 env_logger = "*"
+glob = "*"
 
 [dependencies.web-sys]
 version = "0.3.4"

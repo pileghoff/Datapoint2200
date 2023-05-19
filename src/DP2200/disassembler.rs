@@ -6,6 +6,7 @@ use crate::DP2200::{
 
 pub fn disassemble(memory: &[u8]) -> Vec<(u16, String)> {
     let mut datapoint = Datapoint::build(memory, 1.0);
+    let len = memory.len() as u16;
     let mut cpu = datapoint.cpu;
     let mut addr_to_line = Vec::new();
 
@@ -16,7 +17,7 @@ pub fn disassemble(memory: &[u8]) -> Vec<(u16, String)> {
         operand: None,
         address: None,
     };
-    while inst.instruction_type != InstructionType::Unknown {
+    while inst.instruction_type != InstructionType::Unknown && cpu.program_counter < len {
         let program_counter = cpu.program_counter;
         let tmp_inst = cpu.fetch_instruction();
         if tmp_inst.is_none() {

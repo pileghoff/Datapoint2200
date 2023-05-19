@@ -1,6 +1,3 @@
-use crate::time::Instant;
-use std::sync::mpsc::Sender;
-
 use super::{cpu::Cpu, databus::Databus};
 
 #[derive(Debug, Clone)]

@@ -55,7 +55,7 @@ pub struct CassetteDeck {
 
 fn parse_tap(data: &mut Vec<u8>) -> Vec<CassetteData> {
     let mut cassette_data = Vec::new();
-    let mut gap = [CassetteData::Gap].repeat(90);
+    let mut gap = [CassetteData::Gap].repeat(10);
     cassette_data.append(&mut gap);
     while !data.is_empty() {
         let sec_len_bytes: [u8; 4] = data[0..4].try_into().unwrap();
@@ -64,7 +64,7 @@ fn parse_tap(data: &mut Vec<u8>) -> Vec<CassetteData> {
 
         let d = data.drain(0..sec_len).map(CassetteData::Data);
         cassette_data.append(&mut d.collect());
-        let mut gap = [CassetteData::Gap].repeat(90);
+        let mut gap = [CassetteData::Gap].repeat(10);
         cassette_data.append(&mut gap);
 
         data.drain(0..4);
@@ -140,7 +140,8 @@ impl CassetteDeck {
 
         let cycle_goal = match self.speed {
             MovementSpeed::None => None,
-            MovementSpeed::Regular => Some(431),
+            //MovementSpeed::Regular => Some(431),
+            MovementSpeed::Regular => Some(50),
             MovementSpeed::Rewind => Some(36),
         };
 

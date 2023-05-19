@@ -1,13 +1,12 @@
 use log::{error, info, trace};
 
-use crate::time::Instant;
 use std::{collections::VecDeque, sync::mpsc::channel};
 
 use crate::DP2200::{
     assembler::assemble,
     clock::Clock,
     cpu::Cpu,
-    databus::{Databus, DatabusMode, Dataline},
+    databus::{Databus, DatabusMode},
     screen::Screen,
 };
 
@@ -34,14 +33,13 @@ pub struct Datapoint {
 
 impl Datapoint {
     pub fn build(program: &[u8], time_scale: f32) -> Datapoint {
-        let dataline = Dataline::generate_pair();
         let mut res = Datapoint {
             breakpoints: Vec::new(),
             cpu: Cpu {
                 halted: false,
                 intr_enabled: false,
                 intr_saved: false,
-                memory: [0; 4096],
+                memory: [0; 8192],
                 alpha_mode: true,
                 alpha_registers: [0, 0, 0, 0, 0, 0, 0],
                 alpha_flipflops: [false, false, false, false],
