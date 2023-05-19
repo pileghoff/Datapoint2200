@@ -35,50 +35,24 @@ impl Datapoint {
     pub fn build(program: &[u8], time_scale: f32) -> Datapoint {
         let mut res = Datapoint {
             breakpoints: Vec::new(),
-            cpu: Cpu {
-                halted: false,
-                intr_enabled: false,
-                intr_saved: false,
-                memory: [0; 8192],
-                alpha_mode: true,
-                alpha_registers: [0, 0, 0, 0, 0, 0, 0],
-                alpha_flipflops: [false, false, false, false],
-                beta_registers: [0, 0, 0, 0, 0, 0, 0],
-                beta_flipflops: [false, false, false, false],
-                program_counter: 0,
-                stack: Vec::new(),
-                instruction_register: Instruction::unknown(),
-            },
-            clock: Clock {
-                time_scale,
-                emulated_time_ns: 0,
-            },
-            databus: Databus {
-                selected_addr: 0,
-                selected_mode: DatabusMode::Status,
-                screen: Screen::new(),
-                keyboard: Keyboard::new(),
-                cassette: Cassette::new(),
-            },
+            cpu: Cpu::build(),
+            clock: Clock::build(time_scale),
+            databus: Databus::build(),
         };
-
-        if program.len() > res.cpu.memory.len() {
-            error!("{} is longer than {}", program.len(), res.cpu.memory.len());
-        }
-
-        for (i, b) in program.iter().enumerate() {
-            res.cpu.memory[i] = *b;
-        }
+        res.load_program(program);
 
         res
     }
 
-    pub fn new(lines: Vec<&str>, time_scale: f32) -> Datapoint {
+    pub fn from_assembler(lines: Vec<&str>, time_scale: f32) -> Datapoint {
         let program = assemble(lines).unwrap();
         Datapoint::build(&program, time_scale)
     }
 
     pub fn load_program(&mut self, program: &[u8]) {
+        if program.len() > self.cpu.memory.len() {
+            error!("{} is longer than {}", program.len(), self.cpu.memory.len());
+        }
         for i in 0..self.cpu.memory.len() {
             if let Some(byte) = program.get(i) {
                 self.cpu.memory[i] = *byte;
@@ -191,7 +165,7 @@ mod tests {
     fn test_select_addr() {
         let program = vec!["LoadImm A, 0x69", "Adr", "Halt"];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
         let db = machine.databus;
         assert_eq!(db.selected_addr, 0x69);
@@ -202,7 +176,7 @@ mod tests {
     fn test_write_to_screen() {
         let program = vec!["LoadImm A, 0xe1", "Adr", "LoadImm A, 0x5a", "Write", "Halt"];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
         let db = machine.databus;
         assert_eq!(db.selected_addr, 0xe1);

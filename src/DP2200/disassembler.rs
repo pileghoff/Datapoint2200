@@ -120,7 +120,7 @@ mod tests {
     #[test]
     fn test_basics() {
         let program = vec!["LoadImm A, 10", "AddImm 246", "Halt"];
-        let machine = Datapoint::new(program, 1.0);
+        let machine = Datapoint::from_assembler(program, 1.0);
         let output = disassemble(&machine.cpu.memory);
         assert_eq!(
             output[0..3],

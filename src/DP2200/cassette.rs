@@ -428,7 +428,7 @@ mod tests {
             "Halt",
         ];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.databus.cassette.deck1 = CassetteDeck::new(tap_file);
 
         machine.run();

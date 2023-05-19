@@ -4,6 +4,7 @@ use std::{
 };
 
 use log::info;
+use tracing_subscriber::registry::Data;
 
 use crate::DP2200::{cassette::Cassette, screen::Screen};
 use crate::DP2200::{
@@ -31,6 +32,15 @@ pub struct Databus {
 }
 
 impl Databus {
+    pub fn build() -> Databus {
+        Databus {
+            selected_addr: 0,
+            selected_mode: DatabusMode::Status,
+            screen: Screen::new(),
+            keyboard: Keyboard::new(),
+            cassette: Cassette::new(),
+        }
+    }
     fn read_status(&mut self) -> u8 {
         if self.selected_mode == DatabusMode::Status {
             let mut status = 0;

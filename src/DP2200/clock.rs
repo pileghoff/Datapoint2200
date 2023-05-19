@@ -12,6 +12,13 @@ const INTR_TIME_NS: u128 = 1_000_000;
 const DATABUS_CLOCK_NS: u128 = 156_300 / CYCLE_TIME_NS;
 
 impl Clock {
+    pub fn build(time_scale: f32) -> Clock {
+        Clock {
+            time_scale,
+            emulated_time_ns: 0,
+        }
+    }
+
     fn check_trigger(&self, trigger_time: u128, cycles: u128) -> bool {
         if cycles * CYCLE_TIME_NS > trigger_time {
             return true;

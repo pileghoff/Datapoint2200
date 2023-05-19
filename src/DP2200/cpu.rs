@@ -21,6 +21,22 @@ pub struct Cpu {
 }
 
 impl Cpu {
+    pub fn build() -> Cpu {
+        Cpu {
+            halted: false,
+            intr_enabled: false,
+            intr_saved: false,
+            memory: [0; 8192],
+            alpha_mode: true,
+            alpha_registers: [0, 0, 0, 0, 0, 0, 0],
+            alpha_flipflops: [false, false, false, false],
+            beta_registers: [0, 0, 0, 0, 0, 0, 0],
+            beta_flipflops: [false, false, false, false],
+            program_counter: 0,
+            stack: Vec::new(),
+            instruction_register: Instruction::unknown(),
+        }
+    }
     fn get_from_mem(&mut self) -> Option<u8> {
         let res = self.memory.get(self.program_counter as usize)?;
         self.program_counter += 1;
@@ -526,7 +542,7 @@ mod tests {
     #[test]
     fn test_fetch_add_inst() {
         let program = vec!["Add 2"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         let inst = machine.cpu.fetch_instruction().unwrap();
         assert_eq!(inst.instruction_type, InstructionType::Add);
         assert_eq!(inst.operand, None);
@@ -536,7 +552,7 @@ mod tests {
     #[test]
     fn test_load_imm_inst() {
         let program = vec!["LoadImm A, 10"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
         assert_eq!(machine.cpu.alpha_registers[0], 10);
     }
@@ -544,7 +560,7 @@ mod tests {
     #[test]
     fn test_load_reg_to_reg_inst() {
         let program = vec!["LoadImm A, 10", "Load B, A", "Halt"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
 
         machine.run();
 
@@ -556,7 +572,7 @@ mod tests {
         init_logger();
 
         let program = vec!["LoadImm A, 10", "AddImm 10", "Halt"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
 
         machine.run();
 
@@ -570,7 +586,7 @@ mod tests {
     #[test]
     fn test_add_odd_parity_inst() {
         let program = vec!["LoadImm A, 10", "AddImm 11", "Halt"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
 
         machine.run();
 
@@ -584,7 +600,7 @@ mod tests {
     #[test]
     fn test_add_sign_flag_inst() {
         let program = vec!["LoadImm A, 10", "AddImm 138", "Halt"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
 
         machine.run();
 
@@ -597,7 +613,7 @@ mod tests {
     #[test]
     fn test_add_zero_and_overflow_inst() {
         let program = vec!["LoadImm A, 10", "AddImm 246", "Halt"];
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
 
         machine.run();
 
@@ -611,7 +627,7 @@ mod tests {
     fn test_sub_underflow() {
         let program = vec!["LoadImm A, 10", "SubImm 11", "Halt"];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
 
         assert!(machine.cpu.read_flag(0));
@@ -627,7 +643,7 @@ mod tests {
             "test: Halt", // addr 5
         ];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
 
         assert_eq!(machine.cpu.pop_stack().unwrap(), 4);
@@ -637,7 +653,7 @@ mod tests {
     fn test_return() {
         let program = vec!["Call test", "Halt", "test: LoadImm B, 10", "Return"];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
 
         assert_eq!(machine.cpu.read_reg(1), 10);
@@ -647,7 +663,7 @@ mod tests {
     fn test_push_stack() {
         let program = vec!["LoadImm H, 0x88", "LoadImm L, 0x77", "Push", "Halt"];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
 
         assert_eq!(machine.cpu.pop_stack().unwrap(), 0x8877);
@@ -657,7 +673,7 @@ mod tests {
     fn test_pop_stack() {
         let program = vec!["Call test", "Nop", "Nop", "Nop", "test: Pop", "Halt"];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
 
         assert_eq!(machine.cpu.get_hl_address(), 0x3);
@@ -674,7 +690,7 @@ mod tests {
             "Halt",
         ];
 
-        let mut machine = Datapoint::new(program, 1.0);
+        let mut machine = Datapoint::from_assembler(program, 1.0);
         machine.run();
 
         assert_eq!(machine.cpu.read_reg(0), 10);
@@ -693,7 +709,7 @@ mod tests {
             "Jump run",
         ];
 
-        let mut machine = Datapoint::new(program, 1000.0);
+        let mut machine = Datapoint::from_assembler(program, 1000.0);
 
         let counter = machine.run();
         println!("{}", counter);
@@ -703,7 +719,7 @@ mod tests {
     fn test_comp_zero() {
         let program = vec!["LoadImm A, 10", "LoadImm B, 10", "Comp B", "Halt"];
 
-        let mut machine = Datapoint::new(program, 1000.0);
+        let mut machine = Datapoint::from_assembler(program, 1000.0);
         machine.run();
         assert!(!machine.cpu.read_flag(0));
         assert!(machine.cpu.read_flag(1));
