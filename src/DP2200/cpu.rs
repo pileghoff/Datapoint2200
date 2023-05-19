@@ -527,6 +527,7 @@ mod tests {
     use test_log::test;
 
     use super::*;
+    use crate::DP2200::datapoint::DataPointRunStatus;
     use crate::DP2200::datapoint::Datapoint;
 
     fn init_logger() {
@@ -551,20 +552,90 @@ mod tests {
 
     #[test]
     fn test_load_imm_inst() {
-        let program = vec!["LoadImm A, 10"];
-        let mut machine = Datapoint::from_assembler(program, 1.0);
+        let mut machine = Datapoint::from_assembler(vec!["LoadImm A, 10"], 1.0);
         machine.run();
         assert_eq!(machine.cpu.alpha_registers[0], 10);
     }
 
     #[test]
-    fn test_load_reg_to_reg_inst() {
-        let program = vec!["LoadImm A, 10", "Load B, A", "Halt"];
-        let mut machine = Datapoint::from_assembler(program, 1.0);
+    fn test_load_imm_neg() {
+        let mut machine = Datapoint::from_assembler(vec!["LoadImm A, -10"], 1.0);
+        machine.run();
+        assert_eq!(machine.cpu.alpha_registers[0] as i8, -10);
+    }
 
+    #[test]
+    fn test_load_imm_max() {
+        let mut machine = Datapoint::from_assembler(vec!["LoadImm A, 255"], 1.0);
+        machine.run();
+        assert_eq!(machine.cpu.alpha_registers[0], 255);
+    }
+
+    #[test]
+    fn test_load_imm_min() {
+        let mut machine = Datapoint::from_assembler(vec!["LoadImm A, -128"], 1.0);
+        machine.run();
+        assert_eq!(machine.cpu.alpha_registers[0] as i8, -128);
+    }
+
+    #[test]
+    fn test_load_imm_zero() {
+        let mut machine = Datapoint::from_assembler(vec!["LoadImm A, 0"], 1.0);
+        machine.run();
+        assert_eq!(machine.cpu.alpha_registers[0], 0);
+    }
+
+    #[test]
+    fn test_load_reg_to_reg_inst() {
+        let mut machine = Datapoint::from_assembler(vec!["Load B, A", "Halt"], 1.0);
+        machine.cpu.alpha_registers[0] = 10;
         machine.run();
 
         assert_eq!(machine.cpu.alpha_registers[1], 10);
+        assert_eq!(machine.cpu.alpha_registers[0], 10);
+    }
+
+    #[test]
+    fn test_load_reg_to_reg_inst_neg() {
+        let mut machine = Datapoint::from_assembler(vec!["Load B, A", "Halt"], 1.0);
+        machine.cpu.alpha_registers[0] = (-10_i8 as u8);
+        machine.run();
+
+        assert_eq!(machine.cpu.alpha_registers[1] as i8, -10);
+        assert_eq!(machine.cpu.alpha_registers[0] as i8, -10);
+    }
+
+    #[test]
+    fn test_load_mem_to_reg() {
+        let mut machine = Datapoint::from_assembler(vec!["Load A, M", "Halt"], 1.0);
+        let addr: u16 = 0x1eef;
+        machine.cpu.alpha_registers[5] = (addr >> 8) as u8;
+        machine.cpu.alpha_registers[6] = (addr & 0xff) as u8;
+        machine.cpu.memory[addr as usize] = 10;
+        machine.run();
+
+        assert_eq!(machine.cpu.alpha_registers[0], 10);
+        assert_eq!(machine.cpu.memory[addr as usize], 10);
+    }
+
+    #[test]
+    fn test_load_reg_to_mem() {
+        let mut machine = Datapoint::from_assembler(vec!["Load M, A", "Halt"], 1.0);
+        let addr: u16 = 0x1eef;
+        machine.cpu.alpha_registers[5] = (addr >> 8) as u8;
+        machine.cpu.alpha_registers[6] = (addr & 0xff) as u8;
+        machine.cpu.alpha_registers[0] = 10;
+        machine.run();
+
+        assert_eq!(machine.cpu.alpha_registers[0], 10);
+        assert_eq!(machine.cpu.memory[addr as usize], 10);
+    }
+
+    #[test]
+    fn test_load_mem_to_mem() {
+        let mut machine = Datapoint::from_assembler(vec!["Load M, M"], 1.0);
+        let status = machine.single_step();
+        assert_eq!(status, DataPointRunStatus::Halted)
     }
 
     #[test]

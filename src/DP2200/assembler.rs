@@ -198,6 +198,10 @@ impl OpParser {
                 .nth(1)
                 .context("Could not parse Asci char")? as u8);
         }
+
+        if val.starts_with("-") {
+            return Ok(parse::<i8>(&val)? as u8);
+        }
         Ok(parse::<u8>(&val)?)
     }
 
@@ -540,5 +544,4 @@ mod tests {
         let res = assemble(program);
         println!("{:?}", res);
     }
-
 }
