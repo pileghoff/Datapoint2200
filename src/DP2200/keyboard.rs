@@ -2,6 +2,8 @@ use log::info;
 
 #[derive(Debug, Clone)]
 pub struct Keyboard {
+    display_pressed: bool,
+    keyboard_pressed: bool,
     key_buf: u8,
     key_ready: bool,
 }
@@ -30,6 +32,8 @@ impl Keyboard {
         Keyboard {
             key_buf: 0,
             key_ready: false,
+            keyboard_pressed: false,
+            display_pressed: false,
         }
     }
 
@@ -39,22 +43,49 @@ impl Keyboard {
             self.key_ready = true;
             info!("Got key: {}", key);
         }
+
+        if key == "Tab" {
+            self.display_pressed = true;
+        }
+
+        if key == "Keyboard" {
+            self.keyboard_pressed = true;
+        }
     }
 
     pub fn keyup(&mut self, key: String) {
-        if let Some(key_code) = convert_key(key) {
+        if let Some(key_code) = convert_key(key.clone()) {
             if key_code == self.key_buf {
                 self.key_ready = false;
                 info!("Key release");
             }
         }
+
+        if key == "Tab" {
+            self.display_pressed = false;
+        }
+
+        if key == "Keyboard" {
+            self.keyboard_pressed = false;
+        }
+
     }
 
     pub fn get_status(&self) -> u8 {
+        let mut status :u8 = 0;
         if self.key_ready {
-            return 2;
+            status |= (1<<1);
         }
-        0
+
+        if self.keyboard_pressed {
+            status |= (1<<2);
+        }
+
+        if self.display_pressed {
+            status |= (1<<3);
+        }
+    
+        status
     }
 
     pub fn strobe(&mut self) {

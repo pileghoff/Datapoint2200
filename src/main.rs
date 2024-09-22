@@ -6,116 +6,74 @@ use std::{
     io::{self, Read, Write},
     path::Path,
 };
+
+
+use ratatui::{
+    crossterm::event::{self, KeyCode, KeyEventKind},
+    style::Stylize,
+    widgets::Paragraph,
+    DefaultTerminal,
+};
+use std::time::Duration;
 pub mod DP2200;
-use DP2200::disassembler::disassemble;
+use DP2200::datapoint;
+// fn main() {
+//         let data = read(path).unwrap();
+//         let mut machine = datapoint::Datapoint::build(&data, 1.0);
+//         machine.load_cassette(data);
+//         while !machine.cpu.halted {
+//             println!("Runnig");
+//             machine.update(10.0);
+//             println!("{}", machine.databus.screen.get_screen());
+//         }
+//     }
+// }
 
-enum Sector {
-    Boot(Vec<u8>),
-    FileMarker(u8),
-    Numeric(Vec<u8>),
-    Symbolic(Vec<u8>),
-    Unknown((Vec<u8>, Vec<u8>)),
+fn main() -> io::Result<()> {
+    let mut terminal = ratatui::init();
+    terminal.clear()?;
+    let app_result = run(terminal);
+    ratatui::restore();
+    app_result
 }
 
-fn get_tap_sector(data: &mut Vec<u8>) -> Option<Sector> {
-    if data.len() < 4 {
-        return None;
-    }
+fn run(mut terminal: DefaultTerminal) -> io::Result<()> {
+    let args = env::args().collect::<Vec<_>>();
+    let path = args.get(1).unwrap();
+    let data = read(path).unwrap();
 
-    let sec_len_bytes: [u8; 4] = data[0..4].try_into().unwrap();
-    data.drain(0..4);
-    let sec_len = u32::from_le_bytes(sec_len_bytes) as usize;
-    if data.len() < sec_len {
-        return None;
-    }
+    let mut machine = datapoint::Datapoint::build(&data, 1.0);
+    machine.load_cassette(data);
 
-    let header: Vec<u8> = data.drain(0..4).collect();
-    let sector: Vec<u8> = data.drain(0..sec_len - 4).collect();
-    data.drain(0..4);
 
-    if header[0..2] == [0x81, 0x7e] {
-        return Some(Sector::FileMarker(header[2]));
-    }
+    let mut i = 0;
+    while !machine.cpu.halted {
+        machine.update(100.0);
+        let mut key_msg = String::new();
 
-    if header[0..2] == [0xe7, 0x18] {
-        println!("Symbolic");
-        return Some(Sector::Symbolic(sector));
-    }
-
-    if header[0..2] == [0xc3, 0x3c] {
-        return Some(Sector::Numeric(sector));
-    }
-
-    return Some(Sector::Unknown((header, sector)));
-}
-
-fn parse_tap(data: &mut Vec<u8>) -> Vec<Sector> {
-    let mut sectors = Vec::new();
-    let mut first_sector = true;
-    while let Some(sector) = get_tap_sector(data) {
-        if first_sector {
-            if let Sector::Unknown((mut header, mut data)) = sector {
-                let mut boot_sector = Vec::new();
-                boot_sector.append(&mut header);
-                boot_sector.append(&mut data);
-                sectors.push(Sector::Boot(boot_sector));
-            } else {
-                sectors.push(sector);
-            }
-        } else {
-            sectors.push(sector);
-        }
-
-        first_sector = false;
-    }
-    sectors
-}
-fn main() {
-    let args: Vec<String> = env::args().collect();
-    if let Some(path) = args.get(1) {
-        let mut outfile = path.clone();
-        let mut outfile = outfile.replace(".tap", ".asm");
-        remove_file(outfile.clone());
-        let mut outfile = File::create(outfile).unwrap();
-        let mut tap_file = read(path).unwrap();
-        let tap = parse_tap(&mut tap_file);
-        for sector in tap.iter() {
-            match sector {
-                Sector::Boot(data) => {
-                    outfile.write(b"# Boot sector begin\n");
-                    let disassembly = disassemble(data);
-                    for (addr, inst) in disassembly {
-                        outfile.write(format!("{:#04x}: {}\n", addr, inst).as_bytes());
-                    }
+        if event::poll(Duration::from_millis(100)).unwrap() {
+            if let event::Event::Key(key) = event::read()? {
+                if key.code == KeyCode::Esc {
+                    break;
                 }
-                Sector::FileMarker(file_no) => {
-                    outfile.write(format!("\n\n # File no {}\n", file_no).as_bytes());
+                if key.kind == KeyEventKind::Press {
+                    machine.databus.keyboard.keydown(key.code.to_string());
+                    machine.update(10.0);
+                    machine.databus.keyboard.keyup(key.code.to_string());
+                    key_msg = format!("Key: {} pressed", key.code.to_string());
                 }
-                Sector::Numeric(data) => {
-                    outfile.write(b"\n\n # Numeric data omitted\n");
-                    let disassembly = disassemble(data);
-                    for (addr, inst) in disassembly {
-                        outfile.write(format!("{:#04x}: {}\n", addr, inst).as_bytes());
-                    }
-                }
-                Sector::Symbolic(data) => {
-                    outfile.write(b"# Symbolic sector begin\n");
-                    let disassembly = disassemble(data);
-                    for (addr, inst) in disassembly {
-                        outfile.write(format!("{:#04x}: {}\n", addr, inst).as_bytes());
-                    }
-                }
-                Sector::Unknown((header, data)) => {
-                    outfile.write(
-                        format!(
-                            "\n\n # Unknown sector with header {:?} and len {}\n",
-                            header,
-                            data.len()
-                        )
-                        .as_bytes(),
-                    );
+                if key.kind == KeyEventKind::Release {
+                    key_msg = format!("Key: {} pressed", key.code.to_string());
                 }
             }
         }
+
+        terminal.draw(|frame| {
+            let greeting = Paragraph::new(format!("Greetings: {}\n{}", machine.databus.screen.get_screen(), key_msg))
+                .white();
+            frame.render_widget(greeting, frame.area());
+        })?;
     }
+
+    Ok(())
 }

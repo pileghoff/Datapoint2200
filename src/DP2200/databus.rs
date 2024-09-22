@@ -4,7 +4,6 @@ use std::{
 };
 
 use log::info;
-use tracing_subscriber::registry::Data;
 
 use crate::DP2200::{cassette::Cassette, screen::Screen};
 use crate::DP2200::{
